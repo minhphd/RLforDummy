@@ -1,0 +1,4 @@
+learning_rate: 1e-4, 1e-5, 1e-6
+batch_size: 64, 128, 256
+epsilon_decay: 1000, 10000, 100000
+tau: 10, 100, 1000, 10000

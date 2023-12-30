@@ -1,12 +1,9 @@
 import torch
 import torch.nn as nn
-import torchsummary
-import torch.nn.functional as F
-from torchvision import datasets, transforms
 
-class DQLearning(nn.Module):
+class Net(nn.Module):
     def __init__(self, inputs: int, classes: int, hidden_units: list) -> None:
-        super(DQLearning, self).__init__()
+        super(Net, self).__init__()
         self.inputs = inputs
         self.classes = classes
         self.layers = [
@@ -40,5 +37,4 @@ class DQLearning(nn.Module):
         std = torch.std(x)
 
         x_standardized = (x - mean) / std
-        return self.net(x)
-    
+        return self.net(x_standardized)
