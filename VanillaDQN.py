@@ -119,9 +119,9 @@ if __name__ == "__main__":
     parser.add_argument("--epsilon_decay", help="Rate at which epsilon decays.", type=float, default=1e-5)
     parser.add_argument("--eval_episodes", help="Number of episodes for evaluation.", type=int, default=100)
     parser.add_argument("--grid_search", help="Perform grid search.", action='store_true')
-    parser.add_argument("--eval_mode", help="Perform grid search.", action='store_true')
-    parser.add_argument("--cuda", help="Perform grid search.", action='store_true')
-    parser.add_argument("--mps", help="Perform grid search.", action='store_true')
+    parser.add_argument("--eval_mode", help="Perform evaluation mode with pretrained.", action='store_true')
+    parser.add_argument("--cuda", help="use cuda.", action='store_true')
+    parser.add_argument("--mps", help="use mps (Mac M1)", action='store_true')
     args = parser.parse_args()
 
     if args.cuda:
