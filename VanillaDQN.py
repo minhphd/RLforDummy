@@ -125,6 +125,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.cuda:
+        print('using cuda')
         device = torch.device('cuda')
     elif args.mps:
         device = torch.device('mps')
