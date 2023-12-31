@@ -138,7 +138,7 @@ if __name__ == "__main__":
         obs_space = env.observation_space
         filepath = input('path to trained model file: ')
         trained_net = Net(np.prod(*obs_space.shape), action_space.n, [128,128])
-        trained_net.load_state_dict(torch.load(filepath))
+        trained_net.load_state_dict(torch.load(filepath, map_location=torch.device('cpu')))
         env.reset()
         obs_space = env.observation_space
         generator, seed = gym.utils.seeding.np_random(0)
