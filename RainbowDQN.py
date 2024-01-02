@@ -312,7 +312,7 @@ if __name__ == "__main__":
 
     else:
         # env = gym.make("CartPole-v1", render_mode="human")
-        env = gym.make("LunarLander-v2", render_mode="human")
+        env = gym.make("LunarLander-v2")
         action_space = env.action_space
         env.reset()
         obs_space = env.observation_space
