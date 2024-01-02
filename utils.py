@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from collections import deque
 
+
 def argmax(arr, random):
     max_val = float('-inf')
     ties = []
@@ -11,7 +12,8 @@ def argmax(arr, random):
             ties = [i]
         elif arr[i] == max_val:
             ties.append(i)
-    return random.choice(ties)    
+    return random.choice(ties)
+
 
 def parse_hyperparameters(file_path):
     hyperparameters = {}
@@ -24,23 +26,27 @@ def parse_hyperparameters(file_path):
                 hyperparameters[key] = values
     return hyperparameters
 
+
 class ReplayBuffer():
-    def __init__(self, random, buffer_size:int = 10000, batch_size:int = 64):
+    def __init__(self, random, buffer_size: int = 10000, batch_size: int = 64):
         self.buffer = deque(maxlen=buffer_size)
         self.batch_size = batch_size
         self.random = random
-    
+
     def add(self, state, action, reward, next_state, done):
         experience = (state, action, reward, next_state, done)
         self.buffer.append(experience)
-    
-    def sample(self):
-        idxs = self.random.choice(np.arange(0, len(self.buffer), 1), self.batch_size)
-        experiences = [self.buffer[i] for i in idxs]
-        return experiences
-        # states, actions, rewards, next_states, dones = map(np.array, zip(*experiences))
 
-        # return torch.from_numpy(states), torch.from_numpy(actions), torch.from_numpy(rewards), torch.from_numpy(next_states), torch.from_numpy(dones)
+    def sample(self):
+        idxs = self.random.choice(
+            np.arange(
+                0, len(
+                    self.buffer), 1), self.batch_size)
+        experiences = [self.buffer[i] for i in idxs]
+        
+        states, actions, rewards, next_states, dones = map(np.array, zip(*experiences))
+
+        return torch.from_numpy(states), torch.from_numpy(actions), torch.from_numpy(rewards), torch.from_numpy(next_states), torch.from_numpy(dones)
 
     def __len__(self):
         return len(self.buffer)
@@ -48,11 +54,16 @@ class ReplayBuffer():
 
 # Prioritized Experience Replay
 class PrioritizedReplayBuffer:
-    def __init__(self, random, buffer_size:int = 10000, batch_size:int = 64, alpha:float = 0, beta:float = 0):
+    def __init__(
+            self,
+            random,
+            buffer_size: int = 10000,
+            batch_size: int = 64,
+            alpha: float = 0):
         self.alpha = alpha  # Priority exponent
         self.capacity = buffer_size
         self.batch_size = batch_size
-        
+
         self.buffer = deque(maxlen=buffer_size)
         self.priorities = deque(maxlen=buffer_size)
         self.max_priority = 1.0
@@ -67,7 +78,8 @@ class PrioritizedReplayBuffer:
         prob_weights = priorities ** self.alpha
         prob_weights /= prob_weights.sum()
 
-        indices = self.random.choice(len(self.buffer), self.batch_size, p=prob_weights)
+        indices = self.random.choice(
+            len(self.buffer), self.batch_size, p=prob_weights)
         samples = [self.buffer[idx] for idx in indices]
 
         # Calculate importance sampling weights
@@ -84,4 +96,4 @@ class PrioritizedReplayBuffer:
             self.max_priority = max(self.max_priority, priority)
 
     def __len__(self):
-        return len(self.buffer)     
+        return len(self.buffer)

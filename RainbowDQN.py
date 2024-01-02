@@ -1,3 +1,18 @@
+"""
+Author: Minh Pham-Dinh
+Created: Jan 1st, 2024
+Last Modified: Jan 1st, 2024
+Email: mhpham26@colby.edu
+
+Description:
+    Implementation of Rainbow Deep Q Network.
+    
+    The implementation is based on:
+    M. Hessel et al., "Rainbow: Combining Improvements in Deep Reinforcement Learning," 
+    arXiv preprint arXiv:1710.02298, Oct. 2017. 
+    Available: https://arxiv.org/abs/1710.02298
+"""
+
 import torch
 import copy
 from utils import ReplayBuffer, PrioritizedReplayBuffer, argmax, parse_hyperparameters
@@ -18,6 +33,8 @@ class Agent():
             env: gym.Env,
             generator: np.random.Generator,
             net: torch.nn.Module,
+            beta: float = 0.4,
+            beta_flourish: float = 0.00001,
             eps_start: float = 0.9,
             eps_decay: float = 1000,
             eps_end: float = 0.05,
@@ -25,6 +42,25 @@ class Agent():
             discount: float = 0.99,
             buffer_size: int = 10000,
             batch_size: int = 10000) -> None:
+        """Create a RL agent in given environment
+
+        Args:
+            writer (SummaryWriter): Tensorboard writer to log data 
+            device (torch.device): device type to perform on "mps", "cuda", "cpu"
+            env (gym.Env): gymnasium environment
+            generator (np.random.Generator): Generator object
+            net (torch.nn.Module): Action value network
+            beta (float, optional): hyperparameter for importance-sampling. Defaults to 0.4
+            beta_flourish (float, optional): rate of increase in beta over time steps. Defaults to 0.001 
+            eps_start (float, optional): Initial epsilon, probability of exploration. Defaults to 0.9.
+            eps_decay (float, optional): Epsilon decay. Defaults to 1000.
+            eps_end (float, optional): Final epsilon value, probability of exploration at the end of training. Defaults to 0.05.
+            lr (float, optional): learning rate. Defaults to 0.01.
+            discount (float, optional): discount factor, closer to 0 means agent values future rewards more. Defaults to 0.99.
+            buffer_size (int, optional): size of experience buffer. Defaults to 10000.
+            batch_size (int, optional): size experience batch to optimize model on. Defaults to 10000.
+        """
+        
         self.env = env
         self.target_net = copy.deepcopy(net).to(device)
         self.predict_net = net.to(device)
@@ -35,13 +71,12 @@ class Agent():
             random=generator,
             buffer_size=buffer_size,
             batch_size=batch_size,
-            alpha=0.6,
-            beta=0.4)
+            alpha=0.6)
         self.writer = writer
 
         self.lr = lr
-        self.beta = 0.4
-        self.beta_flourish = 0.001
+        self.beta = beta
+        self.beta_flourish = beta_flourish
         self.eps_start = eps_start
         self.eps_decay = eps_decay
         self.eps_end = eps_end
@@ -53,6 +88,14 @@ class Agent():
         self.device = device
 
     def policy(self, state: torch.Tensor):
+        """Get the state and return action based on greedy epsilon policy
+
+        Args:
+            state (torch.Tensor): current state
+
+        Returns:
+            int: index of action
+        """
         self.steps += 1
         self.eps = self.eps_end + \
             (self.eps_start - self.eps_end) * np.exp(-1. * self.steps / self.eps_decay)
@@ -64,12 +107,14 @@ class Agent():
             return argmax(action_values, self.random)
 
     def optimize_model(self):
+        """optimize action value network
+        """
         if len(self.experiences) < self.experiences.batch_size:
             return
 
         beta = 1 - (1 - self.beta) * np.exp(-1. * \
                     (self.steps - self.batch_size) * self.beta_flourish)
-        
+
         batch, indices, weights = self.experiences.sample(beta)
 
         states, actions, rewards, next_states, dones = map(
@@ -93,6 +138,7 @@ class Agent():
         q_target = rewards + (self.discount * q_next)
 
         td_error = torch.abs(q_target - q_current).squeeze()
+        
         # prevent from zero out priority (proportional method)
         new_priorities = td_error + 0.01
         self.experiences.update_priorities(indices, new_priorities)
@@ -104,10 +150,15 @@ class Agent():
         self.optimizer.zero_grad()
         loss.backward()
 
-        self.writer.add_scalar('loss/steps', loss, self.steps)
         self.optimizer.step()
 
     def train(self, episodes, tau):
+        """training loop for agent
+
+        Args:
+            episodes (int): number of episodes to train
+            tau (int): rate of target network update
+        """
         for episode in tqdm(range(episodes)):
             state, _ = self.env.reset()
             total_reward = 0
@@ -148,6 +199,15 @@ class Agent():
             f'./runs/RainbowDQN/tau_{tau}_batch_{self.batch_size}_epsdecay_{self.eps_decay}_lr_{self.lr}/saved_weights')
 
     def eval(self, episodes=10, verbose=False):
+        """evaluation method. Run the agent under current network for certain number of episodes and get the average reward
+
+        Args:
+            episodes (int, optional): Number of episodes for evaluation. Defaults to 10.
+            verbose (bool, optional): Defaults to False.
+
+        Returns:
+            mean_reward: average reward over episodes
+        """
         mean_reward = 0
         for episode in range(episodes):
             state, _ = self.env.reset()
@@ -238,6 +298,8 @@ if __name__ == "__main__":
         trained_agent = Agent(
             env=env,
             writer=None,
+            eps_start=0,
+            eps_end=0,
             device=device,
             generator=generator,
             net=trained_net
@@ -247,8 +309,8 @@ if __name__ == "__main__":
         env.close()
 
     else:
-        env = gym.make("CartPole-v1", render_mode="human")
-        # env = gym.make("LunarLander-v2")
+        # env = gym.make("CartPole-v1", render_mode="human")
+        env = gym.make("LunarLander-v2", render_mode="human")
         action_space = env.action_space
         env.reset()
         obs_space = env.observation_space
@@ -271,7 +333,7 @@ if __name__ == "__main__":
                 # Initialize writer for each combination
                 writer = SummaryWriter(
                     log_dir=f'runs/RainbowDQN/tau_{tau}_batch_{int(batch_size)}_epsdecay_{eps_decay}_lr_{lr}')
-                
+
                 # Initialize the Agent with specific hyperparameters
                 agent = Agent(
                     env=env,
