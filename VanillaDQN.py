@@ -95,7 +95,8 @@ class Agent():
             self.writer.add_scalar('total reward over episodes', total_reward, episode)
         torch.save(self.predict_net.state_dict(), f'./runs/VanillaDQN/tau_{tau}_batch_{self.batch_size}_epsdecay_{self.eps_decay}_lr_{self.lr}/saved_weights')    
            
-    def eval(self, episodes):
+    def eval(self, episodes=10, verbose=False):
+        mean_reward = 0
         for episode in range(episodes):
             state, _ = self.env.reset()
             total_reward = 0
@@ -107,8 +108,11 @@ class Agent():
                 done = (terminated or truncated)
                 total_reward += reward
                 state = next_state
-                
-            print(f"Episode {episode}, Total Reward: {total_reward}, eps:  {self.eps}")
+            
+            mean_reward += total_reward
+            if verbose:
+                print(f"Episode {episode}, Total Reward: {total_reward}, eps:  {self.eps}")
+        return mean_reward/episodes
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("VanillaDQN.py")
