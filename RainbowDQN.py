@@ -215,7 +215,9 @@ class Agent():
             done = False
 
             while not done:
-                action = self.policy(torch.tensor(state).to(self.device))
+                with torch.no_grad():
+                    action_values = self.predict_net(torch.tensor(state).to(self.device)).squeeze()
+                action = argmax(action_values, self.random)
                 next_state, reward, terminated, truncated, _ = self.env.step(
                     action)
                 done = (terminated or truncated)
