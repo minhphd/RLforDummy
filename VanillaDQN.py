@@ -1,3 +1,18 @@
+"""
+Author: Minh Pham-Dinh
+Created: Dec 25th, 2023
+Last Modified: Jan 1st, 2024
+Email: mhpham26@colby.edu
+
+Description:
+    Implementation of Vanilla Deep Q Network.
+    
+    The implementation is based on:
+    V. Mnih et al., "Human-level control through deep reinforcement learning," in Nature, 
+    vol. 518, no. 7540, pp. 529-533, Feb. 2015. doi: 10.1038/nature14236. 
+    Available: https://www.nature.com/articles/nature14236
+"""
+
 import torch
 import copy
 from utils import ReplayBuffer, argmax, parse_hyperparameters
@@ -9,41 +24,60 @@ from Network import Net
 import itertools
 from tqdm import tqdm
 
+
 class Agent():
-    def __init__(self, writer, device, env: gym.Env, generator :np.random.Generator, net: torch.nn.Module, eps_start :float = 0.9, eps_decay: float = 1000, eps_end :float = 0.05, lr: float = 0.01, discount :float =0.99,buffer_size:int = 10000, batch_size:int = 10000) -> None:
+    def __init__(
+            self,
+            writer,
+            device,
+            env: gym.Env,
+            generator: np.random.Generator,
+            net: torch.nn.Module,
+            eps_start: float = 0.9,
+            eps_decay: float = 1000,
+            eps_end: float = 0.05,
+            lr: float = 0.01,
+            discount: float = 0.99,
+            buffer_size: int = 10000,
+            batch_size: int = 10000) -> None:
         self.env = env
         self.target_net = copy.deepcopy(net).to(device)
         self.predict_net = net.to(device)
-        self.optimizer = torch.optim.AdamW(self.predict_net.parameters(), lr=lr)
+        self.optimizer = torch.optim.AdamW(
+            self.predict_net.parameters(), lr=lr)
         self.batch_size = batch_size
-        self.experiences = ReplayBuffer(random=generator, buffer_size=buffer_size, batch_size=batch_size)
+        self.experiences = ReplayBuffer(
+            random=generator,
+            buffer_size=buffer_size,
+            batch_size=batch_size)
         self.writer = writer
-        
+
         self.lr = lr
         self.eps_start = eps_start
         self.eps_decay = eps_decay
         self.eps_end = eps_end
         self.eps = 0
-        
+
         self.discount = discount
         self.random = generator
         self.steps = 0
-        self.device=device
-    
+        self.device = device
+
     def policy(self, state: torch.Tensor):
         self.steps += 1
-        self.eps = self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1. * self.steps / self.eps_decay)
+        self.eps = self.eps_end + \
+            (self.eps_start - self.eps_end) * np.exp(-1. * self.steps / self.eps_decay)
         if self.random.random() < self.eps:
             return self.env.action_space.sample()
         else:
             with torch.no_grad():
                 action_values = self.predict_net(state).squeeze()
             return argmax(action_values, self.random)
-    
+
     def optimize_model(self):
         if len(self.experiences) < self.experiences.batch_size:
             return
-        
+
         states, actions, rewards, next_states, dones = self.experiences.sample()
 
         states = states.to(self.device, dtype=torch.float)
@@ -58,7 +92,8 @@ class Agent():
 
         # Next Q values based on target network
         with torch.no_grad():
-            q_next = self.target_net(next_states).detach().max(1).values.unsqueeze(-1)
+            q_next = self.target_net(next_states).detach().max(
+                1).values.unsqueeze(-1)
             q_next[dones] = 0.0
         q_target = rewards + (self.discount * q_next)
 
@@ -68,7 +103,7 @@ class Agent():
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-    
+
     def train(self, episodes, tau):
         for episode in tqdm(range(episodes)):
             state, _ = self.env.reset()
@@ -76,7 +111,8 @@ class Agent():
             done = False
             while not done:
                 action = self.policy(torch.tensor(state).to(self.device))
-                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                next_state, reward, terminated, truncated, _ = self.env.step(
+                    action)
                 done = (terminated or truncated)
                 total_reward += reward
                 state_tensor = state
@@ -85,17 +121,26 @@ class Agent():
                 reward_tensor = [reward]
                 terminated_tensor = [done]
 
-                self.experiences.add(state_tensor, action_tensor, reward_tensor, next_state_tensor, terminated_tensor)
+                self.experiences.add(
+                    state_tensor,
+                    action_tensor,
+                    reward_tensor,
+                    next_state_tensor,
+                    terminated_tensor)
 
                 state = next_state
                 self.optimize_model()
             if episode % tau == 0:
                 self.target_net.load_state_dict(self.predict_net.state_dict())
 
-            self.writer.add_scalar('total reward over episodes', total_reward, episode)
-        torch.save(self.predict_net.state_dict(), f'./runs/VanillaDQN/tau_{tau}_batch_{self.batch_size}_epsdecay_{self.eps_decay}_lr_{self.lr}/saved_weights')    
-           
-    def eval(self, episodes):
+            self.writer.add_scalar(
+                'total reward over episodes', total_reward, episode)
+        torch.save(
+            self.predict_net.state_dict(),
+            f'./runs/VanillaDQN/tau_{tau}_batch_{self.batch_size}_epsdecay_{self.eps_decay}_lr_{self.lr}/saved_weights')
+
+    def eval(self, episodes=10, verbose=False):
+        mean_reward = 0
         for episode in range(episodes):
             state, _ = self.env.reset()
             total_reward = 0
@@ -103,23 +148,59 @@ class Agent():
 
             while not done:
                 action = self.policy(torch.tensor(state).to(self.device))
-                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                next_state, reward, terminated, truncated, _ = self.env.step(
+                    action)
                 done = (terminated or truncated)
                 total_reward += reward
                 state = next_state
-                
-            print(f"Episode {episode}, Total Reward: {total_reward}, eps:  {self.eps}")
-    
+
+            mean_reward += total_reward
+            if verbose:
+                print(
+                    f"Episode {episode}, Total Reward: {total_reward}, eps:  {self.eps}")
+        return mean_reward / episodes
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("VanillaDQN.py")
-    parser.add_argument("--num_episodes", help="Number of episodes to run.", type=int, default=1000)
-    parser.add_argument("--tau", help="Frequency to update target (every tau episodes)", type=int, default=1000)
-    parser.add_argument("--learning_rate", help="Learning rate for the optimizer.", type=float, default=0.001)
-    parser.add_argument("--batch_size", help="Batch size for training.", type=int, default=64)
-    parser.add_argument("--epsilon_decay", help="Rate at which epsilon decays.", type=float, default=1e-5)
-    parser.add_argument("--eval_episodes", help="Number of episodes for evaluation.", type=int, default=100)
-    parser.add_argument("--grid_search", help="Perform grid search.", action='store_true')
-    parser.add_argument("--eval_mode", help="Perform evaluation mode with pretrained.", action='store_true')
+    parser.add_argument(
+        "--num_episodes",
+        help="Number of episodes to run.",
+        type=int,
+        default=1000)
+    parser.add_argument(
+        "--tau",
+        help="Frequency to update target (every tau episodes)",
+        type=int,
+        default=1000)
+    parser.add_argument(
+        "--learning_rate",
+        help="Learning rate for the optimizer.",
+        type=float,
+        default=0.001)
+    parser.add_argument(
+        "--batch_size",
+        help="Batch size for training.",
+        type=int,
+        default=64)
+    parser.add_argument(
+        "--epsilon_decay",
+        help="Rate at which epsilon decays.",
+        type=float,
+        default=1e-5)
+    parser.add_argument(
+        "--eval_episodes",
+        help="Number of episodes for evaluation.",
+        type=int,
+        default=100)
+    parser.add_argument(
+        "--grid_search",
+        help="Perform grid search.",
+        action='store_true')
+    parser.add_argument(
+        "--eval_mode",
+        help="Perform evaluation mode with pretrained.",
+        action='store_true')
     parser.add_argument("--cuda", help="use cuda.", action='store_true')
     parser.add_argument("--mps", help="use mps (Mac M1)", action='store_true')
     args = parser.parse_args()
@@ -131,15 +212,19 @@ if __name__ == "__main__":
         device = torch.device('mps')
     else:
         device = torch.device('cpu')
-    
+
     if args.eval_mode:
         env = gym.make("LunarLander-v2", render_mode="human")
         action_space = env.action_space
         env.reset()
         obs_space = env.observation_space
         filepath = input('path to trained model file: ')
-        trained_net = Net(np.prod(*obs_space.shape), action_space.n, [128,128])
-        trained_net.load_state_dict(torch.load(filepath, map_location=torch.device('cpu')))
+        trained_net = Net(np.prod(*obs_space.shape),
+                          action_space.n, [128, 128])
+        trained_net.load_state_dict(
+            torch.load(
+                filepath,
+                map_location=torch.device('cpu')))
         env.reset()
         obs_space = env.observation_space
         generator, seed = gym.utils.seeding.np_random(0)
@@ -148,19 +233,19 @@ if __name__ == "__main__":
             writer=None,
             device=device,
             generator=generator,
-            net = trained_net
+            net=trained_net
         )
-        
+
         trained_agent.eval(args.eval_episodes)
         env.close()
-        
+
     else:
         env = gym.make("LunarLander-v2")
         action_space = env.action_space
         env.reset()
         obs_space = env.observation_space
         generator, seed = gym.utils.seeding.np_random(0)
-        
+
         if args.grid_search:
             filepath = input('link to hyperparameters range file: ')
             hyperparas = parse_hyperparameters(filepath)
@@ -168,19 +253,21 @@ if __name__ == "__main__":
             batch_sizes = hyperparas['batch_size']
             taus = hyperparas['tau']
             epsilon_decays = hyperparas['epsilon_decay']
-                    
+
             print(taus, batch_sizes, epsilon_decays, learning_rates)
             # Grid search
-            for tau, batch_size, eps_decay, lr in itertools.product(taus, batch_sizes, epsilon_decays, learning_rates):
+            for tau, batch_size, eps_decay, lr in itertools.product(
+                    taus, batch_sizes, epsilon_decays, learning_rates):
                 print(f'tau_{tau}_batch_{batch_size}_epsdecay_{eps_decay}')
-                
+
                 # Initialize writer for each combination
-                writer = SummaryWriter(log_dir=f'runs/VanillaDQN/tau_{tau}_batch_{int(batch_size)}_epsdecay_{eps_decay}_lr_{lr}')
-                
+                writer = SummaryWriter(
+                    log_dir=f'runs/VanillaDQN/tau_{tau}_batch_{int(batch_size)}_epsdecay_{eps_decay}_lr_{lr}')
+
                 # Initialize the Agent with specific hyperparameters
                 agent = Agent(
                     env=env,
-                    net=Net(np.prod(*obs_space.shape), action_space.n, [128,128]),
+                    net=Net(np.prod(*obs_space.shape), action_space.n, [128, 128]),
                     writer=writer,
                     discount=0.99,
                     eps_start=1,
@@ -191,19 +278,20 @@ if __name__ == "__main__":
                     generator=generator,
                     device=device
                 )
-                
+
                 # Train the agent
                 agent.train(args.num_episodes, tau)
 
                 # Close the environment if necessary
                 env.close()
-            
+
         else:
-            writer = SummaryWriter(log_dir=f'runs/VanillaDQN/tau_{args.tau}_batch_{args.batch_size}_epsdecay_{args.epsilon_decay}_lr_{args.learning_rate}')
+            writer = SummaryWriter(
+                log_dir=f'runs/VanillaDQN/tau_{args.tau}_batch_{args.batch_size}_epsdecay_{args.epsilon_decay}_lr_{args.learning_rate}')
             # Initialize the Agent with specific hyperparameters
             agent = Agent(
                 env=env,
-                net=Net(np.prod(*obs_space.shape), action_space.n, [128,128]),
+                net=Net(np.prod(*obs_space.shape), action_space.n, [128, 128]),
                 writer=writer,
                 discount=0.99,
                 eps_start=1,
@@ -214,7 +302,7 @@ if __name__ == "__main__":
                 generator=generator,
                 device=device
             )
-            
+
             # Train the agent
             agent.train(args.num_episodes, args.tau)
 
