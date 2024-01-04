@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class Net(nn.Module):
-    def __init__(self, inputs: int, classes: int, hidden_units: list) -> None:
+    def __init__(self, inputs: int, classes: int, hidden_units: list, softmax: bool = False) -> None:
         super(Net, self).__init__()
         self.inputs = inputs
         self.classes = classes
@@ -19,11 +19,14 @@ class Net(nn.Module):
 
         # add output layer
         self.layers.append(nn.Linear(hidden_units[-1], classes))
-        self.layers.append(nn.Identity())
+        if softmax:
+            self.layers.append(nn.Softmax(dim=1))
+        else:
+            self.layers.append(nn.Identity())
 
         def init_weights(m):
             if isinstance(m, nn.Linear):
-                torch.nn.init.xavier_uniform(m.weight)
+                torch.nn.init.xavier_uniform_(m.weight)
                 m.bias.data.fill_(0.01)
 
         self.net = nn.Sequential(*self.layers)
