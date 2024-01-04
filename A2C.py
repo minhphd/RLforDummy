@@ -155,8 +155,9 @@ class Agent():
                 self.writer.add_histogram(f'CriticNet/{name}', param, self.steps)
                 if param.requires_grad:
                     self.writer.add_histogram(f'CriticNet/{name}_grad', param.grad, self.steps)
-                    
-            torch.save(self.actor_net, './runs/A3C/saved_model')
+            
+            if episode % 100 == 0:
+                torch.save(self.actor_net, f'./runs/A3C/saved_model{episode}')
         
     def eval(self, episodes=10, verbose=False):
         mean_reward = 0
