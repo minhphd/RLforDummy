@@ -1,18 +1,18 @@
 """
 Author: Minh Pham-Dinh
 Created: Jan 2nd, 2024
-Last Modified: Jan 1st, 2024
+Last Modified: Jan 4th, 2024
 Email: mhpham26@colby.edu
 
 Description:
     Implementation of Advantage Actor Critic.
     
     The implementation is based on:
+    V. Mnih et al., "Asynchronous Methods for Deep Reinforcement Learning," 2016. 
+    [Online]. Available: https://arxiv.org/abs/1602.01783v2
 """
 
 import torch
-import copy
-from utils import ReplayBuffer, argmax, parse_hyperparameters
 import gymnasium as gym
 import numpy as np
 import argparse
@@ -78,11 +78,12 @@ class Agent():
         # print(Rs)
         
         action_dist = self.actor_net(states)
-        log_probs = torch.log(action_dist)
-        log_act = log_probs.gather(1, actions)
+        dist = torch.distributions.Categorical(action_dist)
+        log_act = dist.log_prob(actions.squeeze()).unsqueeze(1)
+        # log_act = log_probs.gather(1, actions)
         
         advantages = Rs - current_values # or td_error
-        entropy =  -(action_dist.detach() * log_probs.detach()).mean()
+        entropy =  -(action_dist.detach() * torch.log(action_dist).detach()).mean()
         
         actor_loss = -(log_act * advantages.detach()).mean() - 0.0005 * entropy
         critic_loss = (advantages**2).mean()
@@ -109,7 +110,7 @@ class Agent():
         states = []
         rewards = []
         actions = []
-        for episode in tqdm(range(episodes)):
+        for episode in (range(episodes)):
             state, _ = self.env.reset()
             total_reward = 0
             done = False
@@ -141,8 +142,8 @@ class Agent():
                 state_tensor = next_state_tensor
                 total_reward += reward
                 
-            # print(
-            #     f"Episode {episode}, Total Reward: {total_reward}")
+            print(
+                f"Episode {episode}, Total Reward: {total_reward}")
             self.writer.add_scalar(
                 'Performance/total reward over episodes', total_reward, episode)
         
@@ -157,7 +158,7 @@ class Agent():
                     self.writer.add_histogram(f'CriticNet/{name}_grad', param.grad, self.steps)
             
             if episode % 100 == 0:
-                torch.save(self.actor_net, f'./runs/A3C/saved_model{episode}')
+                torch.save(self.actor_net, f'./runs/A2C/saved_model{episode}')
         
     def eval(self, episodes=10, verbose=False):
         mean_reward = 0
@@ -166,9 +167,7 @@ class Agent():
             total_reward = 0
             done = False
             while not done:
-                with torch.no_grad():
-                    action_values = self.actor_net(torch.tensor(state).to(self.device)).squeeze()
-                action = argmax(action_values, self.random)
+                action = self.policy(torch.tensor(state))
                 next_state, reward, terminated, truncated, _ = self.env.step(
                     action)
                 done = (terminated or truncated)
@@ -178,19 +177,19 @@ class Agent():
             mean_reward += total_reward
             if verbose:
                 print(
-                    f"Episode {episode}, Total Reward: {total_reward}, eps:  {self.eps}")
+                    f"Episode {episode}, Total Reward: {total_reward}")
         return mean_reward / episodes
 
 
 if __name__ == "__main__":
-    env = gym.make("LunarLander-v2")
-    # env = gym.make("CartPole-v1", render_mode="human")
+    env = gym.make("LunarLander-v2", render_mode="human")
+    # env = gym.make("CartPole-v1")
     action_space = env.action_space
     env.reset()
     obs_space = env.observation_space
     generator, seed = gym.utils.seeding.np_random(0)
     
-    device = torch.device("mps")
+    device = torch.device("cpu")
     
     writer = SummaryWriter()
     # Initialize the Agent with specific hyperparameters
@@ -200,14 +199,30 @@ if __name__ == "__main__":
         critic_net=Net(np.prod(*obs_space.shape), 1, [128, 128]),
         writer=SummaryWriter(),
         discount=0.99,
-        lr_actor=0.001,
+        lr_actor=0.0003,
         lr_critic=0.001,
         generator=generator,
         device=device
     )
 
     # Train the agent
-    agent.train(10, 16)
+    agent.train(1500, 16)
 
     # Close the environment if necessary
     env.close()
+
+    #--------------------FOR EVALUATION------------------------
+
+    # trained_net = torch.load("./runs/A2C/saved_model900", map_location=device)
+
+    # eval_agent = Agent(
+    #     env=env,
+    #     actor_net=trained_net,
+    #     critic_net=trained_net,
+    #     writer=None,
+    #     device=device,
+    #     generator=generator
+    # )
+
+    # print(eval_agent.eval(10, verbose=True))
+    # env.close()

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from collections import deque
-
+from torch.utils.data import Dataset
 
 def argmax(arr, random):
     max_val = float('-inf')
@@ -97,3 +97,47 @@ class PrioritizedReplayBuffer:
 
     def __len__(self):
         return len(self.buffer)
+    
+
+class PPOMemory(Dataset):
+    def __init__(self, memory_size, actions_space, obs_space, device):
+        self.states = torch.zeros((memory_size, obs_space), dtype=torch.float, device=device)
+        self.actions = torch.zeros((memory_size, 1), dtype=torch.long, device=device)
+        self.probs = torch.zeros((memory_size, 1), dtype=torch.float, device=device)
+        self.rewards = torch.zeros((memory_size, 1), dtype=torch.float, device=device)
+        self.dones = torch.zeros((memory_size, 1), dtype=torch.float, device=device)
+        self.pointer = 0
+
+    def add(self, state, action, log_prob, reward, done):
+        if self.pointer >= len(self.actions):
+            raise Exception('Max memory exceeded')
+        self.states[self.pointer] = state
+        self.actions[self.pointer] = action
+        self.probs[self.pointer] = log_prob
+        self.rewards[self.pointer] = reward
+        self.dones[self.pointer] = done
+        self.pointer += 1
+
+    def canOptimize(self):
+        return self.pointer == len(self.states)
+
+    def clear(self):
+        self.pointer = 0
+    
+    def get_data(self):
+        return self.actions, self.states, self.probs, self.rewards, self.dones
+
+    def __len__(self):
+        return len(self.states)
+
+    def __getitem__(self, idx):
+        if self.pointer < len(self.states):
+            raise Exception('not ready to sample')
+        return {
+            'states': self.states[idx],
+            'actions': self.actions[idx],
+            'probs': self.probs[idx],
+            'rewards': self.rewards[idx],
+            'dones': self.dones[idx],
+            'idx': idx
+        }
