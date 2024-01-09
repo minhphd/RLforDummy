@@ -1,6 +1,6 @@
 # Reinforcement Learning Algorithms Implementation
 
-![LunarLander](./runs/PPo/LunarLanderSol/eval.mov)
+![LunarLander](./runs/PPo/LunarLanderSol/eval.gif)
 
 ## Project Overview
 This project is a collection of my implementations of several key Reinforcement Learning (RL) algorithms. It serves as a practical exploration into the field of RL and demonstrates the application of these algorithms in solving complex environments. 
