@@ -1,8 +1,0 @@
-rollout_ep: 1028
-mini_batch_size: 128
-
-lr_actor: 0.0003
-lr_critic: 0.001
-
-entropy_coef: 0.01
-critic_loss_coef: 0.5

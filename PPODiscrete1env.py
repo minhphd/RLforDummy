@@ -1,15 +1,11 @@
 """
 Author: Minh Pham-Dinh
 Created: Jan 7th, 2024
-Last Modified: Jan 7th, 2024
+Last Modified: Jan 10th, 2024
 Email: mhpham26@colby.edu
 
 Description:
-    Implementation of Proximal Policy Optimization - single environment.
-    
-    The implementation is based on:
-    J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, "Proximal Policy Optimization Algorithms," 
-    arXiv preprint arXiv:1707.06347, 2017. [Online]. Available: https://arxiv.org/abs/1707.06347
+    Network file for used with RL files
 """
 
 import torch
@@ -20,6 +16,7 @@ from Network import Net
 from tqdm import tqdm
 from utils import PPOMemory
 from torch.utils.data import DataLoader
+from datetime import datetime
 
 class Agent():
     def __init__(
@@ -30,13 +27,35 @@ class Agent():
             generator: np.random.Generator,
             actor_net: torch.nn.Module,
             critic_net: torch.nn.Module,
+            logpath: str,
             lr_actor: float = 0.01,
             lr_critic: float = 0.01,
+            vf_coef: float = 0.5,
+            ent_coef: float = 0.01,
             gae_lambda: float = 0.95,
             discount: float = 0.99,
             memory_size: int = 1028,
             mini_batch_size: int = 64,
             epsilon: float = 0.2) -> None:
+        """ Main agent class for environment learning
+
+        Args:
+            writer (SummaryWriter): tensorboard summary writer for debugging
+            device (torch.device): device to run agent on cpu, mps, or cuda
+            env (gym.Env): gymnasium environment
+            generator (np.random.Generator): seeded numpy random generator for reproducibly
+            actor_net (torch.nn.Module): actor network
+            critic_net (torch.nn.Module): critic network
+            lr_actor (float, optional): actor learning rate. Defaults to 0.01.
+            lr_critic (float, optional): critic learning rate. Defaults to 0.01.
+            vf_coef (float, optional): value loss coefficient. Defaults to 0.5.
+            ent_coef (float, optional): entropy loss coefficient. Defaults to 0.01.
+            gae_lambda (float, optional): lambda coefficient for GAE. Defaults to 0.95.
+            discount (float, optional): discount rate. Defaults to 0.99.
+            memory_size (int, optional): size of memory (or batch size). Defaults to 1028.
+            mini_batch_size (int, optional): size of mini batch. Defaults to 64.
+            epsilon (float, optional): clipping range for PPO actor loss. Defaults to 0.2.
+        """
         self.env = env
         self.writer = writer
         self.memory = PPOMemory(memory_size, env.action_space.n, np.prod(*env.observation_space.shape), device=device)
@@ -60,13 +79,33 @@ class Agent():
         self.next_state = None
 
     def policy(self, state: torch.Tensor):
+        """getting action based on current state
+
+        Args:
+            state (torch.Tensor): current state
+
+        Returns:
+            log_prob (Categorical): log_prob of current action
+            action (int): action
+        """
         with torch.no_grad():
             probs = self.actor_net(state)
         dists = torch.distributions.Categorical(probs)
         action = dists.sample()
         return dists.log_prob(action), action.item()
     
+    
     def compute_advantages(self, values, dones, rewards):
+        """Calculate Generalized Advantage Estimation
+
+        Args:
+            values (torch.tensor): tensor of state values for bootstrapping
+            dones (torch.tensor): boolean tensor of termination
+            rewards (torch.tensor): rewards tensor
+
+        Returns:
+            advantages: Generalized Adavantage Estimation
+        """
         n = values.shape[0]
         deltas = rewards[:-1] + self.discount * values[1:] * (1 - dones[:-1]) - values[:-1]
 
@@ -83,6 +122,11 @@ class Agent():
         return advantages
                 
     def optimize_models(self, epochs):
+        """optimize models
+
+        Args:
+            epochs (int): number of epochs to perform gradients optimize
+        """
         memory_loader = DataLoader(self.memory, batch_size=self.mini_batch_size, shuffle=True)
         
         _, states, _, rewards, dones = self.memory.get_data()
@@ -122,8 +166,7 @@ class Agent():
                 returns = batch_advantages + values[batch['idx']].detach()
                 critic_loss = ((returns - new_values)**2).mean()
 
-                total_loss = actor_loss + 0.5*critic_loss - 0.005 * entropy_loss
-                
+                total_loss = actor_loss + vf_coef * critic_loss - ent_coef * entropy_loss
                 
                 # update net works 
                 self.optimizer_actor.zero_grad()
@@ -145,9 +188,13 @@ class Agent():
 
         
         
-    def train(self, max_steps):
-        episode = 0
-        while self.steps < max_steps:
+    def train(self, episodes):
+        """ Training for a certain number of episodes
+
+        Args:
+            max_steps (int): number of episodes to train on
+        """
+        for episode in tqdm(range(episodes)):
             state, _ = self.env.reset()
             total_reward = 0
             done = False
@@ -174,15 +221,19 @@ class Agent():
                 state_tensor = next_state_tensor
                 total_reward += reward
                 
-            print(
-                f"global step {self.steps}, Total Reward: {total_reward}")
             self.writer.add_scalar(
                 'Performance/total reward over episodes', total_reward, episode)
-                
-            # if episode % 100 == 0:
-            #     torch.save(self.actor_net, f'./runs/PPO/saved_model{episode}')
         
     def eval(self, episodes=10, verbose=False):
+        """For evaluation, perform agent rollout under given policy with no optimization
+
+        Args:
+            episodes (int, optional): number of episodes to roll out. Defaults to 10.
+            verbose (bool, optional): whether to print reward at each episode. Defaults to False.
+
+        Returns:
+            average_reward: average reward over episodes
+        """
         mean_reward = 0
         for episode in range(episodes):
             state, _ = self.env.reset()
@@ -204,63 +255,112 @@ class Agent():
 
 
 if __name__ == "__main__":
-    # # env = gym.make("LunarLander-v2")
-    # env = gym.make("CartPole-v1")
-    # action_space = env.action_space
-    # env.reset()
-    # obs_space = env.observation_space
-    # generator, seed = gym.utils.seeding.np_random(0)
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
+    gym_id = 'LunarLander-v2'
+    lr_actor = 2.5e-4
+    lr_critic = 1e-3
+    seed = 1
+    max_episodes = 1500
     
-    # device = torch.device("cpu")
+    memory_size = 1028
+    minibatch_size = 128
+    device = torch.device('cpu')
+    capture_video=True
+    video_record_freq = 200
+    update_epochs = 10  
+    eval_episodes = 50
+
+    clip_coef = 0.2
+    discount = 0.99
+    gae_lambda = 0.95
+    epsilon = 0.2
+    ent_coef = 0.01
+    vf_coef = 0.5
     
-    # writer = SummaryWriter()
-    # # Initialize the Agent with specific hyperparameters
-    # agent = Agent(
-    #     env=env,
-    #     actor_net=Net(np.prod(*obs_space.shape), action_space.n, [128, 128], softmax=True),
-    #     critic_net=Net(np.prod(*obs_space.shape), 1, [128, 128]),
-    #     writer=SummaryWriter(),
-    #     discount=0.99,
-    #     gae_lambda=0.95,
-    #     lr_actor=3e-3,
-    #     lr_critic=1e-3,
-    #     memory_size=516,
-    #     mini_batch_size=128,
-    #     epsilon=0.2,
-    #     generator=generator,
-    #     device=device
-    # )
-
-    # # Train the agent
-    # agent.train(300000)
-
-    # # Close the environment if necessary
-    # env.close()
-
-
-
-    #--------------------FOR EVALUATION------------------------
-
-    # env = gym.make('CartPole-v1', render_mode="human")
-    env = gym.make('LunarLander-v2', render_mode="human")
-    action_space = env.action_space
-    env.reset()
-    obs_space = env.observation_space
-    generator, seed = gym.utils.seeding.np_random(0)
+    #wandb
+    wandb_track = True
+    wandb_project_name = 'PPO_1env_discrete'
+    wandb_entity = 'phdminh01'
     
-    device = torch.device("cpu")
+    if wandb_track:
+        import wandb
+        
+        wandb.init(
+            project=wandb_project_name,
+            entity=wandb_entity,
+            sync_tensorboard=True,
+            name=exp_name,
+            monitor_gym=True,
+            save_code=True,
+        )
     
-    trained_net = torch.load("runs/PPo/LunarLanderSol/LunarLanderSolution", map_location=device)
-    # trained_net = torch.load("./runs/PPO/saved_model800", map_location=device)
+    logpath = f'./runs/PPO/{gym_id}/{exp_name}' 
+    
+    env = gym.make(gym_id, render_mode="rgb_array")
+    env = gym.wrappers.RecordEpisodeStatistics(env)
+    if capture_video:
+        env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+    
+    #seeding
+    env.reset(seed=seed)
+    env.action_space.seed(seed)
+    env.observation_space.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    generator, seed = gym.utils.seeding.np_random(seed)
+    
+    
+    # setup tensorboard
+    writer = SummaryWriter(logpath)
+    
+    hparams = {
+        'algorithm': 'PPO',
+        'environment_id': gym_id,
+        'learning_rate_actor': lr_actor,
+        'learning_rate_critic': lr_critic,
+        'random_seed': seed,
+        'maximum_episodes': max_episodes,
+        'memory_size': memory_size,
+        'minibatch_size': minibatch_size,
+        'update_epochs': update_epochs,
+        'clip_coefficient': clip_coef,
+        'discount_factor': discount,
+        'gae_lambda': gae_lambda,
+        'epsilon': epsilon,
+        'entropy_coefficient': ent_coef,
+        'value_function_coefficient': vf_coef,
+        'eval_episodes': eval_episodes
+    }
 
-    eval_agent = Agent(
+    
+    # Initialize the Agent with specific hyperparameters
+    agent = Agent(
         env=env,
-        actor_net=trained_net,
-        critic_net=trained_net,
-        writer=None,
+        actor_net=Net(np.prod(*env.observation_space.shape), env.action_space.n, [128, 128], softmax=True),
+        critic_net=Net(np.prod(*env.observation_space.shape), 1, [128, 128]),
+        writer=writer,
+        discount=discount,
+        gae_lambda=gae_lambda,
+        lr_actor=lr_actor,
+        lr_critic=lr_critic,
+        memory_size=memory_size,
+        mini_batch_size=minibatch_size,
+        epsilon=epsilon,
+        generator=generator,
         device=device,
-        generator=generator
+        logpath=logpath
     )
 
-    print(eval_agent.eval(10, verbose=True))
+    # Train the agent
+    agent.train(max_episodes)
+
+
+    # Evaluation and save metrics
+    metrics = {
+        'reward_eval': agent.eval(episodes=eval_episodes)
+    }
+
+    writer.add_hparams(hparams, metrics)
+    
+    # Close the environment if necessary
     env.close()

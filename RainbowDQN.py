@@ -5,7 +5,8 @@ Last Modified: Jan 1st, 2024
 Email: mhpham26@colby.edu
 
 Description:
-    Implementation of Rainbow Deep Q Network.
+    Implementation of Rainbow Deep Q Network. 
+    *This code only implemented prioritized replay and double DQN
     
     The implementation is based on:
     M. Hessel et al., "Rainbow: Combining Improvements in Deep Reinforcement Learning," 
@@ -21,8 +22,9 @@ import numpy as np
 import argparse
 from tensorboardX import SummaryWriter
 from Network import Net
-import itertools
 from tqdm import tqdm
+from datetime import datetime
+from Network import Net
 
 
 class Agent():
@@ -193,11 +195,9 @@ class Agent():
                 self.target_net.load_state_dict(self.predict_net.state_dict())
 
             self.writer.add_scalar(
-                'total reward over episodes', total_reward, episode)
-        torch.save(
-            self.predict_net.state_dict(),
-            f'./runs/RainbowDQN/tau_{tau}_batch_{self.batch_size}_epsdecay_{self.eps_decay}_lr_{self.lr}/saved_weights')
-
+                'Performance/total reward over episodes', total_reward, episode)
+    
+    
     def eval(self, episodes=10, verbose=False):
         """evaluation method. Run the agent under current network for certain number of episodes and get the average reward
 
@@ -232,37 +232,109 @@ class Agent():
 
 
 if __name__ == "__main__":
-    device = torch.device('mps')
-    env = gym.make("CartPole-v1", render_mode="human")
-    action_space = env.action_space
-    env.reset()
-    obs_space = env.observation_space
-    generator, seed = gym.utils.seeding.np_random(0)
-
-    tau = 100
-    batch_size = 64
-    learning_rate = 1e-4
-    epsilon_decay = 5000
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
+    gym_id = 'CartPole-v1'
+    seed = 1
+    max_episodes = 800
     
-    writer = SummaryWriter(
-        log_dir=f'runs/VanillaDQN/tau_{tau}_batch_{batch_size}_epsdecay_{epsilon_decay}_lr_{learning_rate}')
+    device = torch.device('cpu')
+    capture_video=True
+    video_record_freq = 200
+    eval_episodes = 50
+
+    discount=0.99
+    lr = 1e-4
+    beta = 0.4
+    beta_flourish = 0.001
+    eps_start = 1
+    eps_decay = 1000
+    eps_end = 0.05
+    buffer_size = 10000
+    batch_size = 128
+    tau = 100
+    
+    #wandb
+    wandb_track = False
+    wandb_project_name = 'RainbowDQN'
+    wandb_entity = 'phdminh01'
+    
+    if wandb_track:
+        import wandb
+        
+        wandb.init(
+            project=wandb_project_name,
+            entity=wandb_entity,
+            sync_tensorboard=True,
+            name=exp_name,
+            monitor_gym=True,
+            save_code=True,
+        )
+    
+    logpath = f'./runs/RainbowDQN/{gym_id}/{exp_name}' 
+    
+    env = gym.make(gym_id, render_mode="rgb_array")
+    env = gym.wrappers.RecordEpisodeStatistics(env)
+    if capture_video:
+        env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+    
+    #seeding
+    env.reset(seed=seed)
+    env.action_space.seed(seed)
+    env.observation_space.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    generator, seed = gym.utils.seeding.np_random(seed)
+    
+    
+    # setup tensorboard
+    writer = SummaryWriter(logpath)
+    
+    # Hyperparameters
+    hparams = {
+        'algorithm': 'RainbowDQN',
+        'environment_id': gym_id,
+        'random_seed': seed,
+        'maximum_episodes': max_episodes,
+        'learning_rate': lr,
+        'beta': beta,
+        'beta_flourish': beta_flourish,
+        'epsilon_start': eps_start,
+        'epsilon_decay': eps_decay,
+        'epsilon_end': eps_end,
+        'buffer_size': buffer_size,
+        'batch_size': batch_size,
+        'tau': tau,
+        'device': device,
+    }
+    
     # Initialize the Agent with specific hyperparameters
     agent = Agent(
-        env=env,
-        net=Net(np.prod(*obs_space.shape), action_space.n, [128, 128]),
         writer=writer,
-        discount=0.99,
-        eps_start=1,
-        eps_decay=epsilon_decay,
-        eps_end=0.01,
-        batch_size=batch_size,
-        lr=learning_rate,
         generator=generator,
+        env=env,
+        net=Net(np.prod(*env.observation_space.shape), env.action_space.n, [128, 128]),
+        beta=beta,
+        beta_flourish=beta_flourish,
+        eps_start=eps_start,
+        eps_end=eps_end,
+        eps_decay=eps_decay,
+        lr=lr,
+        discount=discount,
+        buffer_size=buffer_size,
+        batch_size=batch_size,
         device=device
     )
 
     # Train the agent
-    agent.train(1000, tau)
+    agent.train(max_episodes, tau)
 
+
+    # Evaluation and save metrics
+    metrics = {
+        'reward_eval': agent.eval(episodes=eval_episodes)
+    }
+
+    writer.add_hparams(hparams, metrics)
+    
     # Close the environment if necessary
     env.close()

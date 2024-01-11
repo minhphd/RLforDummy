@@ -1,3 +1,13 @@
+"""
+Author: Minh Pham-Dinh
+Created: Jan 7th, 2024
+Last Modified: Jan 10th, 2024
+Email: mhpham26@colby.edu
+
+Description:
+    Utilities file for used with RL files
+"""
+
 import numpy as np
 import torch
 from collections import deque

@@ -20,6 +20,7 @@ from tensorboardX import SummaryWriter
 from Network import Net
 import itertools
 from tqdm import tqdm
+from datetime import datetime
 
 
 class Agent():
@@ -33,7 +34,24 @@ class Agent():
             critic_net: torch.nn.Module,
             lr_actor: float = 0.01,
             lr_critic: float = 0.01,
-            discount: float = 0.99) -> None:
+            discount: float = 0.99,
+            vf_coef: float = 0.5,
+            ent_coef: float = 0.01) -> None:
+        """ Main agent class for environment learning
+
+        Args:
+            writer (SummaryWriter): tensorboard summary writer for debugging
+            device (torch.device): device to run agent on cpu, mps, or cuda
+            env (gym.Env): gymnasium environment
+            generator (np.random.Generator): seeded numpy random generator for reproducibly
+            actor_net (torch.nn.Module): actor network
+            critic_net (torch.nn.Module): critic network
+            lr_actor (float, optional): actor learning rate. Defaults to 0.01.
+            lr_critic (float, optional): critic learning rate. Defaults to 0.01.
+            vf_coef (float, optional): value loss coefficient. Defaults to 0.5.
+            ent_coef (float, optional): entropy loss coefficient. Defaults to 0.01.
+        """
+        
         self.env = env
         self.writer = writer
         
@@ -46,17 +64,38 @@ class Agent():
         self.lr_critic = lr_critic
         self.optimizer_critic = torch.optim.AdamW(self.critic_net.parameters(), lr_critic)
         
+        self.vf_coef = vf_coef
+        self.ent_coef = ent_coef
         self.discount = discount
         self.random = generator
         self.steps = 0
         self.device = device
 
+
     def policy(self, state: torch.Tensor):
+        """getting action based on current state
+
+        Args:
+            state (torch.Tensor): current state
+
+        Returns:
+            action (int): action
+        """
         with torch.no_grad():
             probs = self.actor_net(state)
         return torch.distributions.Categorical(probs).sample().item()
     
+    
     def compute_returns(self, last_value, rewards):
+        """Calculate the returns by bootstrapping
+
+        Args:
+            last_value (torch.Tensor): last state value before start calculating
+            rewards (torch.Tensor): list of reward
+            
+        Returns:
+            action (int): action
+        """
         n = rewards.shape[0]
         returns = torch.zeros_like(rewards, device=self.device, dtype=torch.float)
         returns[-1] = rewards[-1] + self.discount * last_value
@@ -66,51 +105,63 @@ class Agent():
         
         return returns
                 
+                
     def optimize_models(self, states, actions, rewards, next_state, done):
+        """optimize models
+
+        Args:
+            epochs (int): number of epochs to perform gradients optimize
+        """
         current_values = self.critic_net(states)
         if done:
             last_value = 0
         else:
             last_value = self.critic_net(next_state).detach().item()
-            
+        
+        # compute returns    
         Rs = self.compute_returns(last_value, rewards)
         
-        # print(Rs)
-        
+        # compute log activation
         action_dist = self.actor_net(states)
         dist = torch.distributions.Categorical(action_dist)
         log_act = dist.log_prob(actions.squeeze()).unsqueeze(1)
-        # log_act = log_probs.gather(1, actions)
         
+        # compute losses
         advantages = Rs - current_values # or td_error
         entropy =  -(action_dist.detach() * torch.log(action_dist).detach()).mean()
-        
-        actor_loss = -(log_act * advantages.detach()).mean() - 0.0005 * entropy
+        actor_loss = -(log_act * advantages.detach()).mean()
         critic_loss = (advantages**2).mean()
+        total_loss = actor_loss + self.vf_coef * critic_loss - self.ent_coef * entropy
         
         self.writer.add_scalar('Networks/actor_loss', actor_loss, self.steps)
         self.writer.add_scalar('Networks/critic_loss', critic_loss, self.steps)
         self.writer.add_scalar('Networks/entropy_loss', entropy, self.steps)
+        self.writer.add_scalar('Networks/total_loss', total_loss, self.steps)
         
         
-        # Update networks
+        # update net works 
         self.optimizer_actor.zero_grad()
-        actor_loss.backward()
-        torch.nn.utils.clip_grad_value_(self.actor_net.parameters(), 100)
-        self.optimizer_actor.step()
-        
-        self.optimizer_critic.zero_grad()
-        critic_loss.backward()
-        torch.nn.utils.clip_grad_value_(self.critic_net.parameters(), 100)
+        self.optimizer_critic.zero_grad() 
+        total_loss.backward()               
+        torch.nn.utils.clip_grad_norm_(self.actor_net.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(self.critic_net.parameters(), 0.5)
         self.optimizer_critic.step()
+        self.optimizer_actor.step()
 
-        
+
     def train(self, episodes, n):
+        """Rollout and train the model for a certain number of episodes
+
+        Args:
+            episodes (int): number of training episodes
+            n (int): number of rollout steps before start optimizing model
+        """
+        
         #n = number of step go before start agrevating data
         states = []
         rewards = []
         actions = []
-        for episode in (range(episodes)):
+        for episode in tqdm(range(episodes)):
             state, _ = self.env.reset()
             total_reward = 0
             done = False
@@ -142,23 +193,9 @@ class Agent():
                 state_tensor = next_state_tensor
                 total_reward += reward
                 
-            print(
-                f"Episode {episode}, Total Reward: {total_reward}")
             self.writer.add_scalar(
                 'Performance/total reward over episodes', total_reward, episode)
-        
-            for name, param in self.actor_net.named_parameters():
-                self.writer.add_histogram(f'ActorNet/{name}', param, self.steps)
-                if param.requires_grad:
-                    self.writer.add_histogram(f'ActorNet/{name}_grad', param.grad, self.steps)
-
-            for name, param in self.critic_net.named_parameters():
-                self.writer.add_histogram(f'CriticNet/{name}', param, self.steps)
-                if param.requires_grad:
-                    self.writer.add_histogram(f'CriticNet/{name}_grad', param.grad, self.steps)
             
-            if episode % 100 == 0:
-                torch.save(self.actor_net, f'./runs/A2C/saved_model{episode}')
         
     def eval(self, episodes=10, verbose=False):
         mean_reward = 0
@@ -182,47 +219,96 @@ class Agent():
 
 
 if __name__ == "__main__":
-    env = gym.make("LunarLander-v2", render_mode="human")
-    # env = gym.make("CartPole-v1")
-    action_space = env.action_space
-    env.reset()
-    obs_space = env.observation_space
-    generator, seed = gym.utils.seeding.np_random(0)
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
+    gym_id = 'LunarLander-v2'
+    lr_actor = 2.5e-4
+    lr_critic = 1e-3
+    seed = 1
+    max_episodes = 1000
     
-    device = torch.device("cpu")
+    rollout_steps = 516
+    device = torch.device('cpu')
+    capture_video=True
+    video_record_freq = 200
+    eval_episodes = 50
+
+    discount = 0.99
+    ent_coef = 0.01
+    vf_coef = 0.5
     
-    writer = SummaryWriter()
+    #wandb
+    wandb_track = False
+    wandb_project_name = 'A2C'
+    wandb_entity = 'phdminh01'
+    
+    if wandb_track:
+        import wandb
+        
+        wandb.init(
+            project=wandb_project_name,
+            entity=wandb_entity,
+            sync_tensorboard=True,
+            name=exp_name,
+            monitor_gym=True,
+            save_code=True,
+        )
+    
+    logpath = f'./runs/A2C/{gym_id}/{exp_name}' 
+    
+    env = gym.make(gym_id, render_mode="rgb_array")
+    env = gym.wrappers.RecordEpisodeStatistics(env)
+    if capture_video:
+        env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+    
+    #seeding
+    env.reset(seed=seed)
+    env.action_space.seed(seed)
+    env.observation_space.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    generator, seed = gym.utils.seeding.np_random(seed)
+    
+    
+    # setup tensorboard
+    writer = SummaryWriter(logpath)
+    
+    hparams = {
+        'algorithm': 'A2C',
+        'environment_id': gym_id,
+        'learning_rate_actor': lr_actor,
+        'learning_rate_critic': lr_critic,
+        'random_seed': seed,
+        'rollout_steps': rollout_steps,
+        'maximum_episodes': max_episodes,
+        'discount_factor': discount,
+        'entropy_coefficient': ent_coef,
+        'value_function_coefficient': vf_coef,
+        'eval_episodes': eval_episodes
+    }
+
+    
     # Initialize the Agent with specific hyperparameters
     agent = Agent(
         env=env,
-        actor_net=Net(np.prod(*obs_space.shape), action_space.n, [128, 128], softmax=True),
-        critic_net=Net(np.prod(*obs_space.shape), 1, [128, 128]),
-        writer=SummaryWriter(),
-        discount=0.99,
-        lr_actor=0.0003,
-        lr_critic=0.001,
+        actor_net=Net(np.prod(*env.observation_space.shape), env.action_space.n, [128, 128], softmax=True),
+        critic_net=Net(np.prod(*env.observation_space.shape), 1, [128, 128]),
+        writer=writer,
+        discount=discount,
+        lr_actor=lr_actor,
+        lr_critic=lr_critic,
         generator=generator,
         device=device
     )
 
     # Train the agent
-    agent.train(1500, 16)
+    agent.train(max_episodes, rollout_steps)
 
+    # Evaluation and save metrics
+    metrics = {
+        'reward_eval': agent.eval(episodes=eval_episodes)
+    }
+
+    writer.add_hparams(hparams, metrics)
+    
     # Close the environment if necessary
     env.close()
-
-    #--------------------FOR EVALUATION------------------------
-
-    # trained_net = torch.load("./runs/A2C/saved_model900", map_location=device)
-
-    # eval_agent = Agent(
-    #     env=env,
-    #     actor_net=trained_net,
-    #     critic_net=trained_net,
-    #     writer=None,
-    #     device=device,
-    #     generator=generator
-    # )
-
-    # print(eval_agent.eval(10, verbose=True))
-    # env.close()
