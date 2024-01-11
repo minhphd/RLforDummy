@@ -107,9 +107,9 @@ class PrioritizedReplayBuffer:
 
     def __len__(self):
         return len(self.buffer)
-    
 
-class PPOMemory(Dataset):
+
+class PPOMemorySingle(Dataset):
     def __init__(self, memory_size, actions_space, obs_space, device):
         self.states = torch.zeros((memory_size, obs_space), dtype=torch.float, device=device)
         self.actions = torch.zeros((memory_size, 1), dtype=torch.long, device=device)
@@ -151,3 +151,53 @@ class PPOMemory(Dataset):
             'dones': self.dones[idx],
             'idx': idx
         }
+
+class PPOMemoryMultis(Dataset):
+    def __init__(self, memory_size, obs_shape, num_envs, device):
+        self.total_length = memory_size * num_envs
+        self.obs_shape = obs_shape
+        self.states = torch.zeros((memory_size, num_envs) + obs_shape, dtype=torch.float, device=device)
+        self.actions = torch.zeros((memory_size, num_envs), dtype=torch.long, device=device)
+        self.probs = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
+        self.rewards = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
+        self.dones = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
+        self.pointer = 0
+        
+        print(f'''
+-----------initialized memory----------              
+
+states_buffer_shape: {self.states.shape}
+actions_buffer_shape: {self.actions.shape}
+log_probs_buffer_shape: {self.probs.shape}
+rewards_buffer_shape: {self.rewards.shape}
+dones_buffer_shape: {self.dones.shape}
+
+----------------------------------------
+              ''')
+
+    def add(self, state, action, log_prob, reward, done):
+        if self.pointer >= len(self.actions):
+            raise Exception('Max memory exceeded')
+        self.states[self.pointer] = state
+        self.actions[self.pointer] = action
+        self.probs[self.pointer] = log_prob
+        self.rewards[self.pointer] = reward
+        self.dones[self.pointer] = done
+        self.pointer += 1
+
+    def canOptimize(self):
+        return self.pointer == self.states.shape[0]
+
+    def clear(self):
+        self.pointer = 0
+    
+    def get_data(self):
+        return self.states, self.actions, self.rewards, self.probs, self.dones
+
+    def __len__(self):
+        return self.total_length
+
+    def __getitem__(self, idx):
+        if self.pointer < len(self.states):
+            raise Exception('not ready to sample')
+        return idx

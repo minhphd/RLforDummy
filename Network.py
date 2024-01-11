@@ -1,15 +1,11 @@
 """
 Author: Minh Pham-Dinh
-Created: Dec 25th, 2023
+Created: Jan 7th, 2024
 Last Modified: Jan 10th, 2024
 Email: mhpham26@colby.edu
 
 Description:
-    Implementation of Proximal Policy Optimization - single environment.
-    
-    The implementation is based on:
-    J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, "Proximal Policy Optimization Algorithms," 
-    arXiv preprint arXiv:1707.06347, 2017. [Online]. Available: https://arxiv.org/abs/1707.06347
+    Network file for used with RL files
 """
 
 import torch
