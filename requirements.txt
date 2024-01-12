@@ -1,5 +1,0 @@
-swig
-box2d-py
-tensorboardX
-tqdm
-gymnasium[box2d]

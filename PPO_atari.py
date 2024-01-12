@@ -48,8 +48,7 @@ class Agent():
             generator: np.random.Generator,
             num_envs: int = 1,
             update_epochs: int = 10,
-            lr_actor: float = 0.01,
-            lr_critic: float = 0.01,
+            lr: float = 2.5e-4,
             vf_coef: float = 0.5,
             ent_coef: float = 0.01,
             gae_lambda: float = 0.95,
@@ -96,11 +95,8 @@ class Agent():
         self.actor_net = layer_init(nn.Linear(512, envs.single_action_space.n), std=0.01).to(device)
         self.critic_net = layer_init(nn.Linear(512, 1), std=1).to(device)
         
-        self.lr_actor = lr_actor
-        self.optimizer_actor = torch.optim.Adam(itertools.chain(self.network.parameters(), self.actor_net.parameters()), lr_actor)
-        
-        self.lr_critic = lr_critic
-        self.optimizer_critic = torch.optim.Adam(itertools.chain(self.network.parameters(), self.critic_net.parameters()), lr_critic)
+        self.lr = lr
+        self.optimizer = torch.optim.Adam(itertools.chain(self.network.parameters(), self.actor_net.parameters(), self.critic_net.parameters()), lr)
         
         self.vf_coef = vf_coef
         self.ent_coef = ent_coef
@@ -189,9 +185,8 @@ class Agent():
         
         for _ in (range(epochs)):
             frac = 1.0 - (_ - 1.0) / epochs
-            lrnow = frac * self.lr_actor
-            self.actor_net.param_groups[0]["lr"] = lrnow
-            self.critic_net.param_groups[0]["lr"] = lrnow
+            lrnow = frac * self.lr
+            self.optimizer.param_groups[0]["lr"] = lrnow
             
             for batch in (memory_loader):
                 mb_states = b_states[batch]
@@ -354,8 +349,7 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
     gym_id = 'ALE/Breakout-v5'
-    lr_actor = 2.5e-4
-    lr_critic = 2.5e-4
+    lr = 2.5e-4
     seed = 1
     max_steps = 10000000
     num_envs = 8    
@@ -407,8 +401,7 @@ if __name__ == "__main__":
         'algorithm': 'PPO',
         'environment_id': gym_id,
         'num_envs': num_envs,
-        'learning_rate_actor': lr_actor,
-        'learning_rate_critic': lr_critic,
+        'learning_rate': lr,
         'random_seed': seed,
         'maximum_steps': max_steps,
         'memory_size': memory_size,
@@ -431,8 +424,7 @@ if __name__ == "__main__":
         discount=discount,
         gae_lambda=gae_lambda,
         update_epochs=update_epochs,
-        lr_actor=lr_actor,
-        lr_critic=lr_critic,
+        lr=lr,
         vf_coef=vf_coef,
         ent_coef=ent_coef,
         memory_size=memory_size,
