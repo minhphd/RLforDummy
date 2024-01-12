@@ -16,7 +16,7 @@ Description:
 import torch
 import gymnasium as gym
 import numpy as np
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from Network import CNNnetwork
 from tqdm import tqdm
 from utils import PPOMemoryMultis
