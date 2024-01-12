@@ -154,7 +154,7 @@ class Agent():
             returns
         """
         with torch.no_grad():
-            next_value = agent.get_value(self.next_states).reshape(1, -1)
+            next_value = self.get_value(self.next_states).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
             for t in reversed(range(advantages.shape[0])):
@@ -188,6 +188,11 @@ class Agent():
         b_probs = probs.reshape(-1)
         
         for _ in (range(epochs)):
+            frac = 1.0 - (_ - 1.0) / epochs
+            lrnow = frac * self.lr_actor
+            self.actor_net.param_groups[0]["lr"] = lrnow
+            self.critic_net.param_groups[0]["lr"] = lrnow
+            
             for batch in (memory_loader):
                 mb_states = b_states[batch]
                 mb_actions = b_actions[batch]
@@ -289,7 +294,7 @@ class Agent():
         Returns:
             average_reward: average reward over episodes
         """
-        env = gym.make(gym_id, render_mode="human")
+        env = gym.make(gym_id)
         mean_reward = 0
         for episode in range(episodes):
             state, _ = env.reset()
@@ -356,23 +361,22 @@ if __name__ == "__main__":
     num_envs = 8    
     memory_size = 128
     minibatch_size = 265
-    device = torch.device('mps')
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('mps')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     capture_video=True
-    video_record_freq = 50
-    update_epochs = 10  
+    video_record_freq = 200
+    update_epochs = 4  
     eval_episodes = 50
     
     clip_coef = 0.1
     discount = 0.99
     gae_lambda = 0.95
-    epsilon = 0.2
     ent_coef = 0.01
     vf_coef = 0.5
     
     #wandb
-    wandb_track = False
-    wandb_project_name = 'PPO_1env_discrete'
+    wandb_track = True
+    wandb_project_name = 'Atari-PPO'
     wandb_entity = 'phdminh01'
     
     if wandb_track:
@@ -413,7 +417,6 @@ if __name__ == "__main__":
         'clip_coefficient': clip_coef,
         'discount_factor': discount,
         'gae_lambda': gae_lambda,
-        'epsilon': epsilon,
         'entropy_coefficient': ent_coef,
         'value_function_coefficient': vf_coef,
         'eval_episodes': eval_episodes
@@ -430,9 +433,11 @@ if __name__ == "__main__":
         update_epochs=update_epochs,
         lr_actor=lr_actor,
         lr_critic=lr_critic,
+        vf_coef=vf_coef,
+        ent_coef=ent_coef,
         memory_size=memory_size,
         mini_batch_size=minibatch_size,
-        epsilon=epsilon,
+        epsilon=clip_coef,
         generator=generator,
         device=device
     )
