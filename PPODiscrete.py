@@ -141,13 +141,10 @@ class Agent():
         """
         memory_loader = DataLoader(self.memory, batch_size=self.mini_batch_size, shuffle=True)
         
-        states, actions, rewards, probs, dones = self.memory.get_data()
-        
-        with torch.no_grad():
-            values = self.critic_net(states).squeeze()
+        states, actions, rewards, probs, dones, values = self.memory.get_data()
         
         advantages = self.compute_returns(values, dones, rewards)
-        returns = advantages + values
+        returns = advantages + values.detach()
         
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
@@ -155,12 +152,14 @@ class Agent():
         b_actions = actions.reshape(-1)
         b_rewards = rewards.reshape(-1)
         b_probs = probs.reshape(-1)
+        b_values = values.reshape(-1)
         
         for _ in (range(epochs)):
             for batch in (memory_loader):
                 mb_states = b_states[batch]
                 mb_actions = b_actions[batch]
                 mb_advantages = b_advantages[batch]
+                mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
                 mb_returns = b_returns[batch]
                 
                 new_values = self.critic_net(mb_states).squeeze()
@@ -182,9 +181,8 @@ class Agent():
                 clipped_weighted_probs = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon) * mb_advantages
                 actor_loss = -torch.min(ratio * mb_advantages, clipped_weighted_probs).mean()
                 
-                # print(mb_returns.shape, new_values.shape)
-                critic_loss = self.vf_coef * ((mb_returns - new_values)**2).mean()
-
+                critic_loss = 0.5 * ((mb_returns - new_values)**2).mean()
+                
                 total_loss = actor_loss + self.vf_coef * critic_loss - self.ent_coef * entropy_loss
                 
                 # update net works 
@@ -197,6 +195,7 @@ class Agent():
                 self.optimizer_actor.step()
 
             #log to tensorboard
+        self.writer.add_scalar('Networks/critic_val', self.critic_net(states).mean(), self.steps)
         self.writer.add_scalar('Networks/actor_loss', actor_loss, self.steps)
         self.writer.add_scalar('Networks/critic_loss', critic_loss, self.steps)
         self.writer.add_scalar('Networks/entropy_loss', entropy_loss, self.steps)
@@ -223,6 +222,8 @@ class Agent():
                 pbar.update(num_envs)
                 self.steps += num_envs
                 log_probs, actions = self.policy(next_states_tensor)
+                with torch.no_grad():
+                    value = self.critic_net(next_states_tensor).squeeze()
                 
                 next_states, rewards, terminations, truncations, infos = envs.step(actions.cpu().numpy())
                 
@@ -230,7 +231,7 @@ class Agent():
                 rewards_tensor = torch.tensor(rewards).to(device, dtype=torch.float)
                 dones_tensor = torch.tensor(terminations | truncations).to(device, dtype=torch.float)
                 
-                self.memory.add(self.next_states, actions, log_probs, rewards_tensor, self.next_dones)
+                self.memory.add(self.next_states, actions, log_probs, rewards_tensor, self.next_dones, value)
                 
                 self.next_states = next_states_tensor
                 self.next_dones = dones_tensor
@@ -304,12 +305,11 @@ if __name__ == "__main__":
     memory_size = 265
     minibatch_size = 265
     device = torch.device('cpu')
-    capture_video=True
+    capture_video=False
     video_record_freq = 50
     update_epochs = 10  
     eval_episodes = 50
 
-    clip_coef = 0.2
     discount = 0.99
     gae_lambda = 0.95
     epsilon = 0.2
@@ -356,7 +356,6 @@ if __name__ == "__main__":
         'memory_size': memory_size,
         'minibatch_size': minibatch_size,
         'update_epochs': update_epochs,
-        'clip_coefficient': clip_coef,
         'discount_factor': discount,
         'gae_lambda': gae_lambda,
         'epsilon': epsilon,

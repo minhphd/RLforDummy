@@ -79,6 +79,7 @@ class Agent():
         self.envs = envs
         self.writer = writer
         self.memory = PPOMemoryMultis(memory_size, envs.single_observation_space.shape, num_envs, device=device)
+        self.memory_size = memory_size
         
         self.update_epochs = update_epochs
         self.network = nn.Sequential(
@@ -96,7 +97,7 @@ class Agent():
         self.critic_net = layer_init(nn.Linear(512, 1), std=1).to(device)
         
         self.lr = lr
-        self.optimizer = torch.optim.Adam(itertools.chain(self.network.parameters(), self.actor_net.parameters(), self.critic_net.parameters()), lr)
+        self.optimizer = torch.optim.Adam(itertools.chain(self.network.parameters(), self.actor_net.parameters(), self.critic_net.parameters()), lr, eps=1e-5)
         
         self.vf_coef = vf_coef
         self.ent_coef = ent_coef
@@ -176,7 +177,8 @@ class Agent():
         
         advantages = self.compute_returns(values, dones, rewards)
         returns = advantages + values
-        
+
+        b_values = values.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_states = states.reshape((-1, ) + self.envs.single_observation_space.shape)
@@ -184,14 +186,11 @@ class Agent():
         b_probs = probs.reshape(-1)
         
         for _ in (range(epochs)):
-            frac = 1.0 - (_ - 1.0) / epochs
-            lrnow = frac * self.lr
-            self.optimizer.param_groups[0]["lr"] = lrnow
-            
             for batch in (memory_loader):
                 mb_states = b_states[batch]
                 mb_actions = b_actions[batch]
                 mb_advantages = b_advantages[batch]
+                mb_advantages = (b_advantages[batch] - b_advantages[batch].mean()) / (b_advantages[batch].std() + 1e-8)
                 mb_returns = b_returns[batch]
                 
                 new_values = self.get_value(mb_states).squeeze()
@@ -212,16 +211,27 @@ class Agent():
                 
                 clipped_weighted_probs = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon) * mb_advantages
                 actor_loss = -torch.min(ratio * mb_advantages, clipped_weighted_probs).mean()
-                
-                critic_loss = self.vf_coef * ((mb_returns - new_values)**2).mean()
 
-                total_loss = actor_loss + self.vf_coef * critic_loss - self.ent_coef * entropy_loss
+                v_loss_unclipped = (new_values - b_returns[batch]) ** 2
+                v_clipped = b_values[batch] + torch.clamp(
+                    new_values - b_values[batch],
+                    -0.1,
+                    0.1,
+                )
+                v_loss_clipped = (v_clipped - b_returns[batch]) ** 2
+                v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                critic_loss = 0.5 * v_loss_max.mean()
+                
+                # critic_loss = 0.5 * ((mb_returns - new_values)**2).mean()
+
+                total_loss = actor_loss - self.ent_coef * entropy_loss + self.vf_coef * critic_loss
                 
                 # update net works 
                 self.optimizer.zero_grad()
                 total_loss.backward()               
                 torch.nn.utils.clip_grad_norm_(self.actor_net.parameters(), 0.5)
                 torch.nn.utils.clip_grad_norm_(self.critic_net.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
                 self.optimizer.step()
 
             #log to tensorboard
@@ -243,12 +253,14 @@ class Agent():
         states, _ = self.envs.reset()
         self.next_states = torch.tensor(states).to(device, dtype=torch.float)
         next_states_tensor = self.next_states
-        pbar = tqdm(total=max_steps)
-        while self.steps < max_steps:
+        total_iterations = max_steps // int(num_envs * memory_size)
+        for iteration in tqdm(range(1, total_iterations + 1)):
+            frac = 1.0 - (iteration - 1.0) / total_iterations
+            lrnow = frac * self.lr
+            self.optimizer.param_groups[0]["lr"] = lrnow
             t = 0
             while True:
                 t += 1
-                pbar.update(num_envs)
                 self.steps += num_envs
                 log_probs, actions = self.policy(next_states_tensor)
                 with torch.no_grad():
@@ -275,6 +287,7 @@ class Agent():
                     break
             
             self.optimize_models(self.update_epochs)
+            self.writer.add_scalar('Performance/learning_rate', lrnow, self.steps)
 
 
     def eval(self, gym_id, episodes=10, verbose=False):
