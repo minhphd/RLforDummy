@@ -18,4 +18,4 @@ In this repository, you will find my implementations of the following algorithms
    - Reference: J. Schulman et al., "Proximal Policy Optimization Algorithms," arXiv preprint arXiv:1707.06347, 2017. [Link](https://arxiv.org/abs/1707.06347)
 
 ## Solved Environment
-- **LunarLander-v2**: Each of the implemented algorithms has been sanity-tested on both 'CartPole-v1' and and 'LunarLander-v2' environment from OpenAI Gym. All algorithms solved the 2 toys environments under different hyperparameters and runtimes.
+Each of the implemented algorithms has been sanity-tested on both 'CartPole-v1' and and 'LunarLander-v2' environment from OpenAI Gym. All algorithms solved the 2 toys environments under different hyperparameters and runtimes.

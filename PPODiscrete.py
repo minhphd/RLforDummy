@@ -281,12 +281,12 @@ class Agent():
                     f"Episode {episode}, Total Reward: {total_reward}")
         return mean_reward / episodes
 
-def make_env(gym_id, seed, idx, capture_video, video_record_freq):
+def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
     def thunk():
         env = gym.make(gym_id, render_mode="rgb_array")
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx==0:
-            env = gym.wrappers.RecordVideo(env, "./runs/PPO/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+            env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
         env.reset(seed=seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -304,8 +304,8 @@ if __name__ == "__main__":
     memory_size = 265
     minibatch_size = 265
     device = torch.device('cpu')
-    capture_video=False
-    video_record_freq = 200
+    capture_video=True
+    video_record_freq = 50
     update_epochs = 10  
     eval_episodes = 50
 
@@ -333,9 +333,9 @@ if __name__ == "__main__":
             save_code=True,
         )
     
-    logpath = f'./runs/PPOMulti/{gym_id}/{exp_name}' 
+    logpath = f'./runs/PPO/{gym_id}/{exp_name}' 
     
-    envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, capture_video, video_record_freq) for i in range(num_envs)])
+    envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, capture_video, video_record_freq, logpath) for i in range(num_envs)])
     
     #seeding
     np.random.seed(seed)
