@@ -218,13 +218,11 @@ class Agent():
                 total_loss = actor_loss + self.vf_coef * critic_loss - self.ent_coef * entropy_loss
                 
                 # update net works 
-                self.optimizer_actor.zero_grad()
-                self.optimizer_critic.zero_grad()
+                self.optimizer.zero_grad()
                 total_loss.backward()               
                 torch.nn.utils.clip_grad_norm_(self.actor_net.parameters(), 0.5)
                 torch.nn.utils.clip_grad_norm_(self.critic_net.parameters(), 0.5)
-                self.optimizer_critic.step()
-                self.optimizer_actor.step()
+                self.optimizer.step()
 
             #log to tensorboard
         self.writer.add_scalar('Networks/actor_loss', actor_loss, self.steps)
