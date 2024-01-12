@@ -161,6 +161,7 @@ class PPOMemoryMultis(Dataset):
         self.probs = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
         self.rewards = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
         self.dones = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
+        self.values = torch.zeros((memory_size, num_envs), dtype=torch.float, device=device)
         self.pointer = 0
         
         print(f'''
@@ -175,7 +176,7 @@ dones_buffer_shape: {self.dones.shape}
 ----------------------------------------
               ''')
 
-    def add(self, state, action, log_prob, reward, done):
+    def add(self, state, action, log_prob, reward, done, value):
         if self.pointer >= len(self.actions):
             raise Exception('Max memory exceeded')
         self.states[self.pointer] = state
@@ -183,6 +184,7 @@ dones_buffer_shape: {self.dones.shape}
         self.probs[self.pointer] = log_prob
         self.rewards[self.pointer] = reward
         self.dones[self.pointer] = done
+        self.values[self.pointer] = value
         self.pointer += 1
 
     def canOptimize(self):
@@ -192,7 +194,7 @@ dones_buffer_shape: {self.dones.shape}
         self.pointer = 0
     
     def get_data(self):
-        return self.states, self.actions, self.rewards, self.probs, self.dones
+        return self.states, self.actions, self.rewards, self.probs, self.dones, self.values
 
     def __len__(self):
         return self.total_length
