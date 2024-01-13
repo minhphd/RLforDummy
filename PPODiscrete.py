@@ -296,12 +296,12 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 
 if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'LunarLander-v2'
+    gym_id = 'Acrobot-v1'
     lr_actor = 2.5e-4
     lr_critic = 1e-3
     seed = 1
     max_steps = 200000
-    num_envs = 6    
+    num_envs = 8    
     memory_size = 265
     minibatch_size = 265
     device = torch.device('cpu')
