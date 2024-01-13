@@ -304,7 +304,7 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
     gym_id = 'Pusher-v4'
-    lr = 1e-3
+    lr = 5e-4
     seed = 1
     max_steps = 2000000
     num_envs = 8    

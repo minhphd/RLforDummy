@@ -1,0 +1,273 @@
+Exception ignored in: <function GLContext.__del__ at 0x7f57c1a33ac0>
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.10/site-packages/mujoco/glfw/__init__.py", line 41, in __del__
+    self.free()
+  File "/opt/conda/lib/python3.10/site-packages/mujoco/glfw/__init__.py", line 34, in free
+    if self._context:
+AttributeError: 'GLContext' object has no attribute '_context'
+  0%|                           | 1560/2000000 [00:01<19:50, 1679.27it/s]
+-----------initialized memory----------
+states_buffer_shape: torch.Size([2048, 8, 23])
+actions_buffer_shape: torch.Size([2048, 8, 7])
+log_probs_buffer_shape: torch.Size([2048, 8])
+rewards_buffer_shape: torch.Size([2048, 8])
+dones_buffer_shape: torch.Size([2048, 8])
+----------------------------------------
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-0.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-0.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  8%|██                       | 163752/2000000 [01:00<09:40, 3165.36it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-200.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-200.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 16%|████                     | 325144/2000000 [02:01<08:20, 3347.41it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-400.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-400.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 24%|█████▉                   | 478352/2000000 [02:59<08:36, 2944.40it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-600.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-600.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 32%|████████▎                 | 639280/2000000 [03:59<29:59, 756.34it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-800.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-800.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 40%|██████████               | 800376/2000000 [04:59<06:47, 2941.75it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1000.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1000.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 48%|███████████▉             | 959816/2000000 [05:59<05:04, 3415.14it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1200.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1200.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 56%|█████████████▍          | 1117904/2000000 [06:59<04:51, 3027.35it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1400.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-210216/videos/rl-video-episode-1400.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+ 59%|██████████████▏         | 1184520/2000000 [07:25<04:07, 3297.70it/s]Traceback (most recent call last):
+  File "/root/RLforDummy/PPOContinuous.py", line 392, in <module>
+    agent.train(max_steps)
+  File "/root/RLforDummy/PPOContinuous.py", line 232, in train
+    next_states_tensor = torch.tensor(next_states).to(device, dtype=torch.float)
+KeyboardInterrupt

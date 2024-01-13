@@ -304,7 +304,7 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
     gym_id = 'Pusher-v4'
-    lr = 1e-3
+    lr = 3e-4
     seed = 1
     max_steps = 2000000
     num_envs = 8    
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     discount = 0.99
     gae_lambda = 0.95
     epsilon = 0.2
-    ent_coef = 0.001
+    ent_coef = 0.0
     vf_coef = 0.5
     
     #wandb
@@ -374,8 +374,8 @@ if __name__ == "__main__":
     agent = Agent(
         envs=envs,
         num_envs=num_envs,
-        actor_net=ActorNet(obs_shape=envs.single_observation_space.shape, act_shape=envs.single_action_space.shape, hiddens=[256, 256]),
-        critic_net=Net(np.prod(*envs.single_observation_space.shape), 1, [256, 256]),
+        actor_net=ActorNet(obs_shape=envs.single_observation_space.shape, act_shape=envs.single_action_space.shape, hiddens=[128, 128]),
+        critic_net=Net(np.prod(*envs.single_observation_space.shape), 1, [128, 128]),
         writer=writer,
         discount=discount,
         gae_lambda=gae_lambda,

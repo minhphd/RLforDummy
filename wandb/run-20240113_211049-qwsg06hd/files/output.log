@@ -1,0 +1,274 @@
+Exception ignored in: <function GLContext.__del__ at 0x7f463492bac0>
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.10/site-packages/mujoco/glfw/__init__.py", line 41, in __del__
+    self.free()
+  File "/opt/conda/lib/python3.10/site-packages/mujoco/glfw/__init__.py", line 34, in free
+    if self._context:
+AttributeError: 'GLContext' object has no attribute '_context'
+  0%|                          | 1552/2000000 [00:01<20:15, 1644.55it/s]
+-----------initialized memory----------
+states_buffer_shape: torch.Size([2048, 8, 23])
+actions_buffer_shape: torch.Size([2048, 8, 7])
+log_probs_buffer_shape: torch.Size([2048, 8])
+rewards_buffer_shape: torch.Size([2048, 8])
+dones_buffer_shape: torch.Size([2048, 8])
+----------------------------------------
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-0.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-0.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  8%|█▉                      | 163600/2000000 [01:00<09:39, 3168.62it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-200.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-200.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 16%|███▊                    | 318616/2000000 [01:59<08:26, 3318.16it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-400.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-400.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 24%|█████▊                  | 480800/2000000 [03:01<09:15, 2734.62it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-600.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-600.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 32%|███████▋                | 638856/2000000 [04:01<07:00, 3235.69it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-800.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-800.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 40%|█████████▌              | 800128/2000000 [05:02<06:25, 3113.06it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-1000.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-1000.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 48%|███████████▍            | 957680/2000000 [06:01<05:11, 3347.98it/s]
+Moviepy - Building video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-1200.mp4.
+Moviepy - Writing video /root/RLforDummy/runs/PPOContinuous/Pusher-v4/20240113-211047/videos/rl-video-episode-1200.mp4
+Moviepy - Done !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 53%|████████████▏          | 1054656/2000000 [06:38<04:40, 3371.16it/s]Traceback (most recent call last):
+  File "/root/RLforDummy/PPOContinuous.py", line 392, in <module>
+    agent.train(max_steps)
+  File "/root/RLforDummy/PPOContinuous.py", line 230, in train
+    next_states, rewards, terminations, truncations, infos = envs.step(actions.cpu().numpy())
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/vector/vector_env.py", line 204, in step
+    return self.step_wait()
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/vector/sync_vector_env.py", line 149, in step_wait
+    ) = env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/core.py", line 555, in step
+    observation, reward, terminated, truncated, info = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/normalize.py", line 143, in step
+    obs, rews, terminateds, truncateds, infos = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/core.py", line 522, in step
+    observation, reward, terminated, truncated, info = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/normalize.py", line 81, in step
+    obs, rews, terminateds, truncateds, infos = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/core.py", line 591, in step
+    return self.env.step(self.action(action))
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/core.py", line 522, in step
+    observation, reward, terminated, truncated, info = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/record_episode_statistics.py", line 94, in step
+    ) = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/time_limit.py", line 57, in step
+    observation, reward, terminated, truncated, info = self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/order_enforcing.py", line 56, in step
+    return self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/wrappers/env_checker.py", line 51, in step
+    return self.env.step(action)
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/envs/mujoco/pusher_v4.py", line 165, in step
+    vec_2 = self.get_body_com("object") - self.get_body_com("goal")
+  File "/opt/conda/lib/python3.10/site-packages/gymnasium/envs/mujoco/mujoco_env.py", line 417, in get_body_com
+    def get_body_com(self, body_name):
+KeyboardInterrupt
