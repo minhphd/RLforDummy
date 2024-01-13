@@ -1,6 +1,9 @@
-# Reinforcement Learning Algorithms Implementation
+# RLforDummy: Reinforcement Learning Algorithms Implementation
 
-![LunarLander](./ppo.gif)
+<div align="center">
+  <img src="./ppo.gif" alt="PPO LunarLander" width="45%"/>
+  <img src="./breakout.gif" alt="Breakout" width="23%"/>
+</div>
 
 ## Project Overview
 This project is a collection of my implementations of several key Reinforcement Learning (RL) algorithms. It serves as a practical exploration into the field of RL and demonstrates the application of these algorithms in solving complex environments. 
@@ -14,8 +17,8 @@ In this repository, you will find my implementations of the following algorithms
 2. **Advantage Actor-Critic (A2C)**: This algorithm combines the benefits of value-based and policy-based RL, using an actor-critic approach.
    - Reference: V. Mnih et al., "Asynchronous Methods for Deep Reinforcement Learning," in International Conference on Machine Learning, 2016. [Link](https://arxiv.org/abs/1602.01783)
 
-3. **Proximal Policy Optimization (PPO)**: PPO is an on-policy algorithm that optimizes a clipped surrogate objective function to balance exploration and exploitation.
+3. **Proximal Policy Optimization (PPO)**: PPO is an on-policy algorithm that optimizes a clipped surrogate objective function to balance exploration and exploitation. It has achieved state-of-the-art results on both Atari and Mujoco environments.
    - Reference: J. Schulman et al., "Proximal Policy Optimization Algorithms," arXiv preprint arXiv:1707.06347, 2017. [Link](https://arxiv.org/abs/1707.06347)
 
 ## Solved Environment
-Each of the implemented algorithms has been sanity-tested on both 'CartPole-v1' and and 'LunarLander-v2' environment from OpenAI Gym. All algorithms solved the 2 toys environments under different hyperparameters and runtimes.
+Each of the implemented algorithms has been sanity-tested on 'CartPole-v1' and 'LunarLander-v2' environments from OpenAI Gym. All algorithms solved the two toy environments under various hyperparameters and runtimes. PPO has been tested on Atari and Mujoco where it achieved benchmark results
