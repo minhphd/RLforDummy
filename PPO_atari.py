@@ -212,26 +212,24 @@ class Agent():
                 clipped_weighted_probs = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon) * mb_advantages
                 actor_loss = -torch.min(ratio * mb_advantages, clipped_weighted_probs).mean()
 
-                v_loss_unclipped = (new_values - b_returns[batch]) ** 2
-                v_clipped = b_values[batch] + torch.clamp(
-                    new_values - b_values[batch],
-                    -0.1,
-                    0.1,
-                )
-                v_loss_clipped = (v_clipped - b_returns[batch]) ** 2
-                v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                critic_loss = 0.5 * v_loss_max.mean()
+                # v_loss_unclipped = (new_values - b_returns[batch]) ** 2
+                # v_clipped = b_values[batch] + torch.clamp(
+                #     new_values - b_values[batch],
+                #     -0.1,
+                #     0.1,
+                # )
+                # v_loss_clipped = (v_clipped - b_returns[batch]) ** 2
+                # v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                # critic_loss = 0.5 * v_loss_max.mean()
                 
-                # critic_loss = 0.5 * ((mb_returns - new_values)**2).mean()
+                critic_loss = 0.5 * ((mb_returns - new_values)**2).mean()
 
                 total_loss = actor_loss - self.ent_coef * entropy_loss + self.vf_coef * critic_loss
                 
                 # update net works 
                 self.optimizer.zero_grad()
                 total_loss.backward()               
-                torch.nn.utils.clip_grad_norm_(self.actor_net.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(self.critic_net.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(itertools.chain(self.network.parameters() ,self.critic_net.parameters(), self.actor_net.parameters()), 0.5)
                 self.optimizer.step()
 
             #log to tensorboard
@@ -323,9 +321,10 @@ class Agent():
 def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
     def thunk():
         env = gym.make(gym_id, render_mode="rgb_array")
-        env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx==0:
             env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+        
+        env = gym.wrappers.RecordEpisodeStatistics(env)
         
         #This wrapper samples initial states by taking a random number (between 1 and 30) of no-ops on reset.
         #for injecting stochasticity into the environment (Mnih et al., 2015) 
@@ -346,8 +345,8 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
         env = ClipRewardEnv(env)
         
         #Change to grayscale and resize
-        env = gym.wrappers.GrayScaleObservation(env)
         env = gym.wrappers.ResizeObservation(env, (84, 84))
+        env = gym.wrappers.GrayScaleObservation(env)
         env = gym.wrappers.FrameStack(env, 4)
         
         env.reset(seed=seed)
@@ -359,7 +358,7 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 
 if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'ALE/Breakout-v5'
+    gym_id = 'BreakoutNoFrameskip-v4'
     lr = 2.5e-4
     seed = 1
     max_steps = 10000000
