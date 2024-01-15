@@ -219,27 +219,30 @@ class Agent():
 
 
 if __name__ == "__main__":
-    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'LunarLander-v2'
-    lr_actor = 2.5e-4
-    lr_critic = 1e-3
-    seed = 1
-    max_episodes = 1000
-    
-    rollout_steps = 516
-    device = torch.device('cpu')
-    capture_video=True
-    video_record_freq = 200
-    eval_episodes = 50
+    # Experiment setup
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
+    gym_id = 'LunarLander-v2'  # Environment ID for Gym (LunarLander-v2)
+    lr_actor = 2.5e-4  # Learning rate for the actor network
+    lr_critic = 1e-3  # Learning rate for the critic network
+    seed = 1  # Seed for reproducibility
+    max_episodes = 1000  # Maximum number of episodes
 
-    discount = 0.99
-    ent_coef = 0.01
-    vf_coef = 0.5
-    
-    #wandb
-    wandb_track = False
-    wandb_project_name = 'A2C'
-    wandb_entity = 'phdminh01'
+    # Rollout and training parameters
+    rollout_steps = 516  # Number of rollout steps
+    device = torch.device('cpu')  # Device for training (CPU)
+    capture_video = True  # Flag to determine whether to capture videos
+    video_record_freq = 200  # Frequency of recording video episodes
+    eval_episodes = 50  # Number of episodes for evaluation
+
+    # A2C hyperparameters
+    discount = 0.99  # Discount factor for future rewards
+    ent_coef = 0.01  # Entropy coefficient
+    vf_coef = 0.5  # Value function coefficient
+
+    # Weights & Biases configuration (for experiment tracking)
+    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
+    wandb_project_name = 'A2C'  # Project name in Weights & Biases
+    wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
     
     if wandb_track:
         import wandb

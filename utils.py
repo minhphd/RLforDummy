@@ -37,31 +37,6 @@ def parse_hyperparameters(file_path):
     return hyperparameters
 
 
-class ReplayBuffer():
-    def __init__(self, random, buffer_size: int = 10000, batch_size: int = 64):
-        self.buffer = deque(maxlen=buffer_size)
-        self.batch_size = batch_size
-        self.random = random
-
-    def add(self, state, action, reward, next_state, done):
-        experience = (state, action, reward, next_state, done)
-        self.buffer.append(experience)
-
-    def sample(self):
-        idxs = self.random.choice(
-            np.arange(
-                0, len(
-                    self.buffer), 1), self.batch_size)
-        experiences = [self.buffer[i] for i in idxs]
-        
-        states, actions, rewards, next_states, dones = map(np.array, zip(*experiences))
-
-        return torch.from_numpy(states), torch.from_numpy(actions), torch.from_numpy(rewards), torch.from_numpy(next_states), torch.from_numpy(dones)
-
-    def __len__(self):
-        return len(self.buffer)
-
-
 # Prioritized Experience Replay
 class PrioritizedReplayBuffer:
     def __init__(

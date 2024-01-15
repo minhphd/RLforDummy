@@ -295,31 +295,35 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
     return thunk
 
 if __name__ == "__main__":
-    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'Acrobot-v1'
-    lr_actor = 2.5e-4
-    lr_critic = 1e-3
-    seed = 1
-    max_steps = 200000
-    num_envs = 8    
-    memory_size = 265
-    minibatch_size = 265
-    device = torch.device('cpu')
-    capture_video=False
-    video_record_freq = 50
-    update_epochs = 10  
-    eval_episodes = 50
+    # Experiment setup
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
+    gym_id = 'Acrobot-v1'  # Environment ID for Gym (Acrobot-v1)
+    lr_actor = 2.5e-4  # Learning rate for the actor network
+    lr_critic = 1e-3  # Learning rate for the critic network
+    seed = 1  # Seed for reproducibility
+    max_steps = 200000  # Maximum number of steps
+    num_envs = 8  # Number of parallel environments
 
-    discount = 0.99
-    gae_lambda = 0.95
-    epsilon = 0.2
-    ent_coef = 0.1
-    vf_coef = 0.5
-    
-    #wandb
-    wandb_track = False
-    wandb_project_name = 'PPO_1env_discrete'
-    wandb_entity = 'phdminh01'
+    # Memory and optimization hyperparameters
+    memory_size = 265  # Size of the replay buffer
+    minibatch_size = 265  # Size of minibatches for training
+    device = torch.device('cpu')  # Device for training (CPU)
+    capture_video = False  # Flag to determine whether to capture videos
+    video_record_freq = 50  # Frequency of recording video episodes
+    update_epochs = 10  # Number of epochs for updating networks
+    eval_episodes = 50  # Number of episodes for evaluation
+
+    # PPO hyperparameters
+    discount = 0.99  # Discount factor for future rewards
+    gae_lambda = 0.95  # GAE lambda parameter
+    epsilon = 0.2  # PPO clipping parameter
+    ent_coef = 0.1  # Entropy coefficient
+    vf_coef = 0.5  # Value function coefficient
+
+    # Weights & Biases configuration (for experiment tracking)
+    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
+    wandb_project_name = 'PPO_1env_discrete'  # Project name in Weights & Biases
+    wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
     
     if wandb_track:
         import wandb

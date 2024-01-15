@@ -16,7 +16,7 @@ Description:
 
 import torch
 import copy
-from utils import ReplayBuffer, PrioritizedReplayBuffer, argmax, parse_hyperparameters
+from utils import PrioritizedReplayBuffer, argmax, parse_hyperparameters
 import gymnasium as gym
 import numpy as np
 import argparse
@@ -232,31 +232,35 @@ class Agent():
 
 
 if __name__ == "__main__":
-    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'CartPole-v1'
-    seed = 1
-    max_episodes = 1500
-    
-    device = torch.device('cpu')
-    capture_video=True
-    video_record_freq = 100
-    eval_episodes = 50
+    # Experiment setup
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
+    gym_id = 'CartPole-v1'  # Environment ID for Gym
+    seed = 1  # Seed for reproducibility
+    max_episodes = 1500  # Maximum number of episodes
 
-    discount=0.99
-    lr = 1e-4
-    beta = 0.4
-    beta_flourish = 0.001
-    eps_start = 1
-    eps_decay = 1000
-    eps_end = 0.05
-    buffer_size = 10000
-    batch_size = 128
-    tau = 100
-    
-    #wandb
-    wandb_track = False
-    wandb_project_name = 'LunarLander'
-    wandb_entity = 'phdminh01'
+    # Training and evaluation parameters
+    device = torch.device('cpu')  # Device for training (CPU or CUDA)
+    capture_video = True  # Flag to determine whether to capture videos
+    video_record_freq = 100  # Frequency of recording video episodes
+    eval_episodes = 50  # Number of episodes for evaluation
+
+    # SAC hyperparameters
+    discount = 0.99  # Discount factor for future rewards
+    lr = 1e-4  # Learning rate
+    beta = 0.4  # Beta parameter for SAC
+    beta_flourish = 0.001  # Beta flourish parameter for SAC
+    eps_start = 1  # Initial epsilon for exploration
+    eps_decay = 1000  # Epsilon decay rate
+    eps_end = 0.05  # Final epsilon value for exploration
+    buffer_size = 10000  # Size of the replay buffer
+    batch_size = 128  # Size of minibatches for training
+    tau = 100  # Target network update rate
+
+    # Weights & Biases configuration (for experiment tracking)
+    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
+    wandb_project_name = 'LunarLander'  # Project name in Weights & Biases
+    wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
+
     
     if wandb_track:
         import wandb

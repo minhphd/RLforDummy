@@ -357,32 +357,37 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 
 
 if __name__ == "__main__":
-    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
-    gym_id = 'BreakoutNoFrameskip-v4'
-    lr = 2.5e-4
-    seed = 1
-    max_steps = 10000000
-    num_envs = 8    
-    memory_size = 128
-    minibatch_size = 265
-    # device = torch.device('mps')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    capture_video=True
-    video_record_freq = 200
-    update_epochs = 4  
-    eval_episodes = 50
-    
-    clip_coef = 0.1
-    discount = 0.99
-    gae_lambda = 0.95
-    ent_coef = 0.01
-    vf_coef = 0.5
-    
-    #wandb
-    wandb_track = True
-    wandb_project_name = 'Atari-PPO'
-    wandb_entity = 'phdminh01'
-    
+    # Experiment setup
+    exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
+    gym_id = 'BreakoutNoFrameskip-v4'  # Environment ID for Gym (Atari Breakout)
+    lr = 2.5e-4  # Learning rate
+    seed = 1  # Seed for reproducibility
+    max_steps = 10000000  # Maximum number of steps
+    num_envs = 8  # Number of parallel environments
+
+    # Memory and optimization hyperparameters
+    memory_size = 128  # Size of the replay buffer
+    minibatch_size = 265  # Size of minibatches for training
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Device for training (CPU or CUDA)
+
+    # Video recording and evaluation parameters
+    capture_video = True  # Flag to determine whether to capture videos
+    video_record_freq = 200  # Frequency of recording video episodes
+    update_epochs = 4  # Number of epochs for updating networks
+    eval_episodes = 50  # Number of episodes for evaluation
+
+    # PPO hyperparameters
+    clip_coef = 0.1  # PPO clipping parameter
+    discount = 0.99  # Discount factor for future rewards
+    gae_lambda = 0.95  # GAE lambda parameter
+    ent_coef = 0.01  # Entropy coefficient
+    vf_coef = 0.5  # Value function coefficient
+
+    # Weights & Biases configuration (for experiment tracking)
+    wandb_track = True  # Flag to enable Weights & Biases tracking
+    wandb_project_name = 'Atari-PPO'  # Project name in Weights & Biases
+    wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
+        
     if wandb_track:
         import wandb
         
