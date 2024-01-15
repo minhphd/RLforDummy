@@ -165,3 +165,60 @@ dones_buffer_shape: {self.dones.shape}
         if self.pointer < len(self.states):
             raise Exception('not ready to sample')
         return idx
+    
+
+class SACMemory():
+    def __init__(self, memory_size, env, random, device):
+        """SAC memory - a replay buffer
+
+        Args:
+            memory_size (int): max memory size before
+            env (_type_): gymnasium environment
+            random (np.Random): numpy random generator
+            device (torch.device): device to store on 'cpu', 'cuda' or 'mps'
+        """
+        self.total_length = memory_size
+        self.random = random
+        self.states = torch.zeros((memory_size, )+ env.observation_space.shape, dtype=torch.float, device=device)
+        self.actions = torch.zeros((memory_size, ) + env.action_space.shape, dtype=torch.float, device=device)
+        self.rewards = torch.zeros((memory_size, ), dtype=torch.float, device=device)
+        self.next_states = torch.zeros((memory_size, ) + env.observation_space.shape, dtype=torch.float, device=device)
+        self.dones = torch.zeros((memory_size, ), dtype=torch.float, device=device)
+        self.filled = False
+        self.pointer = 0
+        
+        print(f'''
+-----------initialized memory----------              
+
+states_buffer_shape: {self.states.shape}
+actions_buffer_shape: {self.actions.shape}
+rewards_buffer_shape: {self.rewards.shape}
+next_states_buffer_shape: {self.next_states.shape}
+dones_buffer_shape: {self.dones.shape}
+
+----------------------------------------
+              ''')
+
+    def add(self, state, action, reward, next_state, done):
+        if self.pointer >= self.states.shape[0]:
+            if not self.filled:
+                self.filled = True
+            self.pointer = 0
+        
+        self.states[self.pointer] = state
+        self.actions[self.pointer] = action
+        self.rewards[self.pointer] = reward
+        self.next_states[self.pointer] = next_state
+        self.dones[self.pointer] = done
+        self.pointer += 1
+        
+    def sample(self, batch_size):
+        if len(self) < batch_size and not self.filled:
+            raise Exception('not enough data to start sample, please lower minibatch size or collect more experiences')
+        
+        idxs = self.random.choice(
+            np.arange(0, len(self), 1), batch_size)
+        return self.states[idxs], self.actions[idxs], self.rewards[idxs], self.next_states[idxs], self.dones[idxs]
+
+    def __len__(self):
+        return self.pointer

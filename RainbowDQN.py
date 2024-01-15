@@ -20,7 +20,7 @@ from utils import ReplayBuffer, PrioritizedReplayBuffer, argmax, parse_hyperpara
 import gymnasium as gym
 import numpy as np
 import argparse
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from Network import Net
 from tqdm import tqdm
 from datetime import datetime
@@ -235,11 +235,11 @@ if __name__ == "__main__":
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')
     gym_id = 'CartPole-v1'
     seed = 1
-    max_episodes = 800
+    max_episodes = 1500
     
     device = torch.device('cpu')
     capture_video=True
-    video_record_freq = 200
+    video_record_freq = 100
     eval_episodes = 50
 
     discount=0.99
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     
     #wandb
     wandb_track = False
-    wandb_project_name = 'RainbowDQN'
+    wandb_project_name = 'LunarLander'
     wandb_entity = 'phdminh01'
     
     if wandb_track:
