@@ -143,7 +143,7 @@ dones_buffer_shape: {self.dones.shape}
     
 
 class SACMemory():
-    def __init__(self, memory_size, env, random, device):
+    def __init__(self, memory_size, env, random):
         """SAC memory - a replay buffer
 
         Args:
@@ -154,11 +154,11 @@ class SACMemory():
         """
         self.total_length = memory_size
         self.random = random
-        self.states = torch.zeros((memory_size, )+ env.observation_space.shape, dtype=torch.float, device=device)
-        self.actions = torch.zeros((memory_size, ) + env.action_space.shape, dtype=torch.float, device=device)
-        self.rewards = torch.zeros((memory_size, ), dtype=torch.float, device=device)
-        self.next_states = torch.zeros((memory_size, ) + env.observation_space.shape, dtype=torch.float, device=device)
-        self.dones = torch.zeros((memory_size, ), dtype=torch.float, device=device)
+        self.states = torch.zeros((memory_size, )+ env.observation_space.shape, dtype=torch.float)
+        self.actions = torch.zeros((memory_size, ) + env.action_space.shape, dtype=torch.float)
+        self.rewards = torch.zeros((memory_size, ), dtype=torch.float)
+        self.next_states = torch.zeros((memory_size, ) + env.observation_space.shape, dtype=torch.float)
+        self.dones = torch.zeros((memory_size, ), dtype=torch.float)
         self.filled = False
         self.pointer = 0
         
@@ -186,7 +186,14 @@ dones_buffer_shape: {self.dones.shape}
         self.next_states[self.pointer] = next_state
         self.dones[self.pointer] = done
         self.pointer += 1
-        
+    
+    def to_device(self, device):
+        self.states = self.states.to(device)
+        self.actions = self.actions.to(device)
+        self.rewards = self.rewards.to(device)
+        self.next_states = self.next_states.to(device)
+        self.dones = self.dones.to(device)
+    
     def sample(self, batch_size):
         if len(self) < batch_size and not self.filled:
             raise Exception('not enough data to start sample, please lower minibatch size or collect more experiences')

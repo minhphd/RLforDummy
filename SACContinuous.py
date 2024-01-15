@@ -124,10 +124,11 @@ class Agent():
         
         self.env = env
         self.steps = 0
+        self.device = device
         
         self.writer =writer
         self.generator=generator
-        self.memory = SACMemory(memory_size, env, generator, device)
+        self.memory = SACMemory(memory_size, env, generator)
         self.memory_size = memory_size
         self.mini_batch_size = mini_batch_size
         self.update_epochs = update_epochs
@@ -205,7 +206,7 @@ class Agent():
                 self.writer.add_scalar('Networks/actor_loss', policy_loss, self.steps)
                 self.writer.add_scalar('Networks/critic_loss', q_loss, self.steps)
                 self.writer.add_scalar('Networks/entropy_loss', logpi.mean(), self.steps)
-            # self.writer.add_scalar('Networks/total_loss', total_loss, self.steps)
+                self.writer.add_scalar('Networks/alpha_loss', alpha_loss, self.steps)
             # self.writer.add_scalar('Networks/KL divergence', approx_kl, self.steps)
 
 
@@ -219,7 +220,8 @@ class Agent():
         
         pbar = tqdm(total=max_steps)
         state, _ = self.env.reset()
-        state_tensor = torch.tensor(state, dtype=torch.float).to(device)
+        state_tensor = torch.tensor(state, dtype=torch.float).cpu()
+        current_device = torch.device('cpu')
         while self.steps < max_steps:
             pbar.update()
             self.steps += 1
@@ -227,13 +229,19 @@ class Agent():
             if self.steps < lr_start:
                 action = self.env.action_space.sample()
             else:
+                if self.steps == lr_start:
+                    self.memory.to_device(self.device)
+                    current_device = self.device
+                    state_tensor = state_tensor.to(current_device)
                 with torch.no_grad():
                     action, _, _ = self.policy_net(state_tensor.unsqueeze(0))
                     action = action.cpu().squeeze().numpy()
                 
             next_states, rewards, termination, truncation, info = self.env.step(action)
-            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(device)
-            action_tensor = torch.tensor(action, dtype=torch.float).to(device)
+            
+            # start sampling action on cpu before learning to prevent bottle neck
+            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(current_device)
+            action_tensor = torch.tensor(action, dtype=torch.float).to(current_device)
             done = termination or truncation
             
             #add to memory
@@ -247,7 +255,7 @@ class Agent():
                 if self.writer is not None:
                     writer.add_scalar('Performance/total reward over episodes', info['episode']['r'], self.steps)
                 state, _ = self.env.reset()
-                state_tensor = torch.tensor(state, dtype=torch.float).to(device)
+                state_tensor = torch.tensor(state, dtype=torch.float).to(self.device)
                 
                 
         pbar.close()     
@@ -296,13 +304,13 @@ if __name__ == "__main__":
     minibatch_size = 256  # Size of minibatches for training
     update_epochs = 1  # Number of epochs for updating networks
     max_steps = 500000  # Maximum number of steps to train
-    train_freq = 64  # Frequency of training steps
-    lr_start = 10000  # Step to start learning rate scheduling
+    train_freq = 1  # Frequency of training steps
+    lr_start = 5000  # Step to start learning rate scheduling
     eval_episodes = 50  # Number of episodes for evaluation
 
     # Environment and training setup
     seed = 1  # Seed for reproducibility
-    device = torch.device('cpu')  # Device for training (CPU or CUDA)
+    device = torch.device('mps')  # Device for training (CPU, CUDA, or MPS)
     capture_video = True  # Flag to determine whether to capture videos
     video_record_freq = 200  # Frequency of recording video episodes
 
