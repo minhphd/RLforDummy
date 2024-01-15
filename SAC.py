@@ -8,6 +8,9 @@ Description:
     Implementation of Soft Actor Critic - intend to use with continuous environment.
     
     The implementation is based on:
+    Reference: T. Haarnoja, A. Zhou, P. Abbeel, and S. Levine, "Soft Actor-Critic: Off-Policy 
+    Deep Reinforcement Learning with Real-World Robots," arXiv preprint arXiv:1801.01290, 2018. 
+    (https://arxiv.org/abs/1707.06347)
 """
 
 import torch

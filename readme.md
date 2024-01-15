@@ -3,6 +3,7 @@
 <div align="center">
   <img src="./ppo.gif" alt="PPO LunarLander" width="45%"/>
   <img src="./breakout.gif" alt="Breakout" width="23%"/>
+  <img src="./humanoid.gif" alt="Breakout" width="23%"/>
 </div>
 
 ## Project Overview
