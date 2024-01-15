@@ -1,9 +1,9 @@
 # RLforDummy: Reinforcement Learning Algorithms Implementation
 
 <div align="center">
-  <img src="./ppo.gif" alt="PPO LunarLander" width="45%"/>
-  <img src="./breakout.gif" alt="Breakout" width="23%"/>
-  <img src="./humanoid.gif" alt="Breakout" width="23%"/>
+  <img src="./ppo.gif" alt="PPO LunarLander" width="40%"/>
+  <img src="./breakout.gif" alt="Breakout" width="20%"/>
+  <img src="./humanoid.gif" alt="Breakout" width="28%"/>
 </div>
 
 ## Project Overview
