@@ -1,0 +1,522 @@
+diff --git a/CleanRL.py b/CleanRL.py
+index 75ead5e..6592ddc 100644
+--- a/CleanRL.py
++++ b/CleanRL.py
+@@ -25,17 +25,17 @@ class Args:
+     """if toggled, `torch.backends.cudnn.deterministic=False`"""
+     cuda: bool = True
+     """if toggled, cuda will be enabled by default"""
+-    track: bool = False
++    track: bool = True
+     """if toggled, this experiment will be tracked with Weights and Biases"""
+-    wandb_project_name: str = "cleanRL"
++    wandb_project_name: str = "SAC"
+     """the wandb's project name"""
+-    wandb_entity: str = None
++    wandb_entity: str = 'phdminh01'
+     """the entity (team) of wandb's project"""
+-    capture_video: bool = False
++    capture_video: bool = True
+     """whether to capture videos of the agent performances (check out `videos` folder)"""
+ 
+     # Algorithm specific arguments
+-    env_id: str = "Pendulum-v1"
++    env_id: str = "LunarLander-v2"
+     """the environment id of the task"""
+     total_timesteps: int = 500000
+     """total timesteps of the experiments"""
+@@ -59,12 +59,14 @@ class Args:
+     """the frequency of updates for the target nerworks"""
+     autotune: bool = True
+     """automatic tuning of the entropy coefficient"""
++    train_freq=100
++    gradient_steps=10
+ 
+ 
+ def make_env(env_id, seed, idx, capture_video, run_name):
+     def thunk():
+         if capture_video and idx == 0:
+-            env = gym.make(env_id, render_mode="rgb_array")
++            env = gym.make(env_id, render_mode="rgb_array", continuous=True)
+             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+         else:
+             env = gym.make(env_id)
+@@ -169,7 +171,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
+     random.seed(args.seed)
+     np.random.seed(args.seed)
+     torch.manual_seed(args.seed)
+-    torch.backends.cudnn.deterministic = args.torch_deterministic
++    
+ 
+     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+ 
+@@ -222,72 +224,70 @@ poetry run pip install "stable_baselines3==2.0.0a1"
+         if "final_info" in infos:
+             for info in infos["final_info"]:
+                 writer.add_scalar('Performance/total reward over episodes', info['episode']['r'], global_step)
+-                break
+-
++                # break
++        
+         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+-        real_next_obs = next_obs.copy()
+-        for idx, trunc in enumerate(truncations):
+-            if trunc:
+-                real_next_obs[idx] = infos["final_observation"][idx]
+-        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
++        # real_next_obs = next_obs.copy()
++        # for idx, trunc in enumerate(truncations):
++        #     if trunc:
++        #         real_next_obs[idx] = infos["final_observation"][idx]
++        rb.add(obs, next_obs, actions, rewards, (terminations | truncations)[0], infos)
+ 
+         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+         obs = next_obs
+ 
+         # ALGO LOGIC: training.
+-        if global_step > args.learning_starts:
+-            data = rb.sample(args.batch_size)
+-            with torch.no_grad():
+-                next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+-                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
+-
+-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
+-            qf2_a_values = qf2(data.observations, data.actions).view(-1)
+-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+-            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+-            qf_loss = qf1_loss + qf2_loss
+-
+-            # optimize the model
+-            q_optimizer.zero_grad()
+-            qf_loss.backward()
+-            q_optimizer.step()
+-
+-            if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+-                for _ in range(
+-                    args.policy_frequency
+-                ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+-                    pi, log_pi, _ = actor.get_action(data.observations)
+-                    qf1_pi = qf1(data.observations, pi)
+-                    qf2_pi = qf2(data.observations, pi)
+-                    min_qf_pi = torch.min(qf1_pi, qf2_pi)
+-                    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+-
+-                    actor_optimizer.zero_grad()
+-                    actor_loss.backward()
+-                    actor_optimizer.step()
+-
+-                    if args.autotune:
+-                        with torch.no_grad():
+-                            _, log_pi, _ = actor.get_action(data.observations)
+-                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+-
+-                        a_optimizer.zero_grad()
+-                        alpha_loss.backward()
+-                        a_optimizer.step()
+-                        alpha = log_alpha.exp().item()
+-
+-            # update the target networks
+-            if global_step % args.target_network_frequency == 0:
+-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
+-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+-
+-            writer.add_scalar('Networks/actor_loss', actor_loss, global_step)
+-            writer.add_scalar('Networks/critic_loss', qf_loss, global_step)
++        if global_step > args.learning_starts and global_step % args.train_freq == 0:
++            for _ in range(args.gradient_steps):
++                data = rb.sample(args.batch_size)
++                with torch.no_grad():
++                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
++                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
++                    qf2_next_target = qf2_target(data.next_observations, next_state_actions)
++                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
++                    next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
++
++                qf1_a_values = qf1(data.observations, data.actions).view(-1)
++                qf2_a_values = qf2(data.observations, data.actions).view(-1)
++                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
++                qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
++                qf_loss = qf1_loss + qf2_loss
++
++                # optimize the model
++                q_optimizer.zero_grad()
++                qf_loss.backward()
++                q_optimizer.step()
++
++                pi, log_pi, _ = actor.get_action(data.observations)
++                qf1_pi = qf1(data.observations, pi)
++                qf2_pi = qf2(data.observations, pi)
++                min_qf_pi = torch.min(qf1_pi, qf2_pi)
++                actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
++
++                actor_optimizer.zero_grad()
++                actor_loss.backward()
++                actor_optimizer.step()
++
++                if args.autotune:
++                    with torch.no_grad():
++                        _, log_pi, _ = actor.get_action(data.observations)
++                    alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
++
++                    a_optimizer.zero_grad()
++                    alpha_loss.backward()
++                    a_optimizer.step()
++                    alpha = log_alpha.exp().item()
++
++                # update the target networks
++                if global_step % args.target_network_frequency == 0:
++                    for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
++                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
++                    for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
++                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
++
++                writer.add_scalar('Networks/alpha_loss', alpha_loss, global_step)
++                writer.add_scalar('Networks/actor_loss', actor_loss, global_step)
++                writer.add_scalar('Networks/critic_loss', qf_loss, global_step)
+ 
+     envs.close()
+     writer.close()
+\ No newline at end of file
+diff --git a/SACContinuous.py b/SACContinuous.py
+index 1aa10f1..6639d65 100644
+--- a/SACContinuous.py
++++ b/SACContinuous.py
+@@ -26,20 +26,18 @@ from datetime import datetime
+ import itertools
+ import copy
+ 
+-LOGSTD_LOW = -20
++LOGSTD_LOW = -5
+ LOGSTD_HIGH = 2
+ 
+ class ActorNet(torch.nn.Module):
+     def __init__(self, env, obs_shape, act_shape, hiddens):
+         super().__init__()
+-        self.fc = Net(np.prod(*obs_shape), hiddens[-1], hiddens)
++        self.fc = Net(np.prod(*obs_shape), hiddens[-1], hiddens, open_ended=True)
+         
+         self.fc_mean = torch.nn.Sequential(
+-            torch.nn.ReLU(),
+             torch.nn.Linear(hiddens[-1], np.prod(act_shape)))
+         
+         self.fc_logstd = torch.nn.Sequential(
+-            torch.nn.ReLU(),
+             torch.nn.Linear(hiddens[-1], np.prod(act_shape)))
+         
+         #from CleanRL SAC implementation
+@@ -121,20 +119,19 @@ class Agent():
+             memory_size: int = 1028,
+             mini_batch_size: int = 64,
+             tau: float = 0.5) -> None:
+-        
+         self.env = env
+         self.steps = 0
+         self.device = device
+         
+         self.writer =writer
+         self.generator=generator
+-        self.memory = SACMemory(memory_size, env, generator)
++        self.memory = SACMemory(memory_size, env, generator, device)
+         self.memory_size = memory_size
+         self.mini_batch_size = mini_batch_size
+         self.update_epochs = update_epochs
+         
+         self.policy_net = policy_net.to(device)
+-        self.q1_net = q_net.to(device)
++        self.q1_net = copy.deepcopy(q_net).to(device)
+         self.q2_net = copy.deepcopy(q_net).to(device)
+         self.q1_target_net = copy.deepcopy(q_net).to(device)
+         self.q2_target_net = copy.deepcopy(q_net).to(device)
+@@ -151,6 +148,7 @@ class Agent():
+         self.a_optimizer = torch.optim.Adam([self.log_alpha], lr=q_lr)
+         self.tau = tau
+  
++
+     def optimize_models(self, epochs):
+         for _ in range(epochs):
+             mb_states, mb_actions, mb_rewards, mb_next_states, mb_dones = self.memory.sample(self.mini_batch_size)
+@@ -220,19 +218,13 @@ class Agent():
+         
+         pbar = tqdm(total=max_steps)
+         state, _ = self.env.reset()
+-        state_tensor = torch.tensor(state, dtype=torch.float).cpu()
+-        current_device = torch.device('cpu')
+-        while self.steps < max_steps:
++        state_tensor = torch.tensor(state, dtype=torch.float).to(self.device)
++        for self.steps in range(max_steps):
+             pbar.update()
+-            self.steps += 1
+             
+             if self.steps < lr_start:
+                 action = self.env.action_space.sample()
+             else:
+-                if self.steps == lr_start:
+-                    self.memory.to_device(self.device)
+-                    current_device = self.device
+-                    state_tensor = state_tensor.to(current_device)
+                 with torch.no_grad():
+                     action, _, _ = self.policy_net(state_tensor.unsqueeze(0))
+                     action = action.cpu().squeeze().numpy()
+@@ -240,23 +232,22 @@ class Agent():
+             next_states, rewards, termination, truncation, info = self.env.step(action)
+             
+             # start sampling action on cpu before learning to prevent bottle neck
+-            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(current_device)
+-            action_tensor = torch.tensor(action, dtype=torch.float).to(current_device)
+-            done = termination or truncation
++            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(self.device)
++            action_tensor = torch.tensor(action, dtype=torch.float).to(self.device)
+             
+             #add to memory
+-            self.memory.add(state_tensor, action_tensor, rewards, next_states_tensor, done)
++            self.memory.add(state_tensor, action_tensor, rewards, next_states_tensor, termination)
+             state_tensor = next_states_tensor
+             
+-            if self.steps % train_freq == 0 and self.steps >= lr_start:     
+-                self.optimize_models(self.update_epochs)
+-            
+             if 'episode' in info:
+                 if self.writer is not None:
+                     writer.add_scalar('Performance/total reward over episodes', info['episode']['r'], self.steps)
+                 state, _ = self.env.reset()
+                 state_tensor = torch.tensor(state, dtype=torch.float).to(self.device)
+-                
++            
++            if self.steps % train_freq == 0 and self.steps >= lr_start:     
++                self.optimize_models(self.update_epochs)
++            
+                 
+         pbar.close()     
+ 
+@@ -290,33 +281,33 @@ class Agent():
+ if __name__ == "__main__":
+     # Experiment setup
+     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
+-    # gym_id = 'Hopper-v4'  # Environment ID for Gym
++    gym_id = 'Humanoid-v4'  # Environment ID for Gym
+     # Alternative environments:
+     # gym_id = 'BipedalWalker-v3'
+-    gym_id = 'Pendulum-v1'
++    # gym_id = 'Pendulum-v1'
+ 
+     # Hyperparameters for SAC
+     policy_lr = 3e-4  # Learning rate for the policy network
+     q_lr = 1e-3  # Learning rate for the Q network
+     gamma = 0.99  # Discount factor for future rewards
+     tau = 0.005  # Target network update rate
+-    memory_size = int(3e5)  # Size of the replay buffer
+-    minibatch_size = 256  # Size of minibatches for training
+-    update_epochs = 1  # Number of epochs for updating networks
+-    max_steps = 500000  # Maximum number of steps to train
+-    train_freq = 1  # Frequency of training steps
+-    lr_start = 5000  # Step to start learning rate scheduling
++    memory_size = int(1e6)  # Size of the replay buffer
++    minibatch_size = 512  # Size of minibatches for training
++    update_epochs = 30  # Number of epochs for updating networks
++    max_steps = 5000000  # Maximum number of steps to train
++    train_freq = 100  # Frequency of training steps
++    lr_start = 10000  # Step to start learning rate scheduling
+     eval_episodes = 50  # Number of episodes for evaluation
+ 
+     # Environment and training setup
+     seed = 1  # Seed for reproducibility
+-    device = torch.device('mps')  # Device for training (CPU, CUDA, or MPS)
++    device = torch.device('cuda')  # Device for training (CPU, CUDA, or MPS)
+     capture_video = True  # Flag to determine whether to capture videos
+     video_record_freq = 200  # Frequency of recording video episodes
+ 
+     # Weights & Biases configuration (for experiment tracking)
+-    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
+-    wandb_project_name = 'PPO-mujoco'  # Project name in Weights & Biases
++    wandb_track = True  # Flag to enable/disable Weights & Biases tracking
++    wandb_project_name = 'SAC'  # Project name in Weights & Biases
+     wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
+ 
+     # Additional parameters (currently unused or commented out)
+@@ -379,8 +370,8 @@ if __name__ == "__main__":
+         device=device,
+         env=env,
+         generator=generator,
+-        policy_net=ActorNet(env=env, obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256,256]),
+-        q_net=SoftQNetwork(obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256,256]),
++        policy_net=ActorNet(env=env, obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256]),
++        q_net=SoftQNetwork(obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256]),
+         update_epochs=update_epochs,
+         policy_lr=policy_lr,
+         q_lr=q_lr,
+@@ -393,7 +384,6 @@ if __name__ == "__main__":
+     # Train the agent
+     agent.train(max_steps, train_freq, lr_start)
+ 
+-
+     # Evaluation and save metrics
+     metrics = {
+         'reward_eval': agent.eval(episodes=eval_episodes, path=(logpath + '/saved_model'))
+diff --git a/runs/Pendulum-v1__CleanRL__1__1705344097/events.out.tfevents.1705344097.Phams-MacBook-Pro.local.22331.0 b/runs/Pendulum-v1__CleanRL__1__1705344097/events.out.tfevents.1705344097.Phams-MacBook-Pro.local.22331.0
+deleted file mode 100644
+index 8e02da9..0000000
+Binary files a/runs/Pendulum-v1__CleanRL__1__1705344097/events.out.tfevents.1705344097.Phams-MacBook-Pro.local.22331.0 and /dev/null differ
+diff --git a/runs/Pendulum-v1__CleanRL__1__1705344156/events.out.tfevents.1705344156.Phams-MacBook-Pro.local.22451.0 b/runs/Pendulum-v1__CleanRL__1__1705344156/events.out.tfevents.1705344156.Phams-MacBook-Pro.local.22451.0
+deleted file mode 100644
+index 777a02f..0000000
+Binary files a/runs/Pendulum-v1__CleanRL__1__1705344156/events.out.tfevents.1705344156.Phams-MacBook-Pro.local.22451.0 and /dev/null differ
+diff --git a/runs/Pendulum-v1__CleanRL__1__1705344168/events.out.tfevents.1705344168.Phams-MacBook-Pro.local.22490.0 b/runs/Pendulum-v1__CleanRL__1__1705344168/events.out.tfevents.1705344168.Phams-MacBook-Pro.local.22490.0
+deleted file mode 100644
+index 2866fe3..0000000
+Binary files a/runs/Pendulum-v1__CleanRL__1__1705344168/events.out.tfevents.1705344168.Phams-MacBook-Pro.local.22490.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-140834/events.out.tfevents.1705345715.Phams-MacBook-Pro.local.25090.0 b/runs/SAC/Pendulum-v1/20240115-140834/events.out.tfevents.1705345715.Phams-MacBook-Pro.local.25090.0
+deleted file mode 100644
+index 175a001..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-140834/events.out.tfevents.1705345715.Phams-MacBook-Pro.local.25090.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.meta.json b/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.meta.json
+deleted file mode 100644
+index 03b3865..0000000
+--- a/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.meta.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{"step_id": 0, "episode_id": 0, "content_type": "video/mp4"}
+\ No newline at end of file
+diff --git a/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.mp4 b/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.mp4
+deleted file mode 100644
+index 8e1ab22..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-140834/videos/rl-video-episode-0.mp4 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141152/events.out.tfevents.1705345913.Phams-MacBook-Pro.local.25380.0 b/runs/SAC/Pendulum-v1/20240115-141152/events.out.tfevents.1705345913.Phams-MacBook-Pro.local.25380.0
+deleted file mode 100644
+index 0048c51..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141152/events.out.tfevents.1705345913.Phams-MacBook-Pro.local.25380.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.meta.json b/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.meta.json
+deleted file mode 100644
+index 03b3865..0000000
+--- a/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.meta.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{"step_id": 0, "episode_id": 0, "content_type": "video/mp4"}
+\ No newline at end of file
+diff --git a/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.mp4 b/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.mp4
+deleted file mode 100644
+index 8e1ab22..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141152/videos/rl-video-episode-0.mp4 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141651/events.out.tfevents.1705346212.Phams-MacBook-Pro.local.25893.0 b/runs/SAC/Pendulum-v1/20240115-141651/events.out.tfevents.1705346212.Phams-MacBook-Pro.local.25893.0
+deleted file mode 100644
+index e1e5d53..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141651/events.out.tfevents.1705346212.Phams-MacBook-Pro.local.25893.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.meta.json b/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.meta.json
+deleted file mode 100644
+index 03b3865..0000000
+--- a/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.meta.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{"step_id": 0, "episode_id": 0, "content_type": "video/mp4"}
+\ No newline at end of file
+diff --git a/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.mp4 b/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.mp4
+deleted file mode 100644
+index 8e1ab22..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141651/videos/rl-video-episode-0.mp4 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141823/events.out.tfevents.1705346304.Phams-MacBook-Pro.local.26049.0 b/runs/SAC/Pendulum-v1/20240115-141823/events.out.tfevents.1705346304.Phams-MacBook-Pro.local.26049.0
+deleted file mode 100644
+index 60893bc..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141823/events.out.tfevents.1705346304.Phams-MacBook-Pro.local.26049.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.meta.json b/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.meta.json
+deleted file mode 100644
+index 03b3865..0000000
+--- a/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.meta.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{"step_id": 0, "episode_id": 0, "content_type": "video/mp4"}
+\ No newline at end of file
+diff --git a/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.mp4 b/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.mp4
+deleted file mode 100644
+index 8e1ab22..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141823/videos/rl-video-episode-0.mp4 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141910/events.out.tfevents.1705346350.Phams-MacBook-Pro.local.26154.0 b/runs/SAC/Pendulum-v1/20240115-141910/events.out.tfevents.1705346350.Phams-MacBook-Pro.local.26154.0
+deleted file mode 100644
+index 0ffc055..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141910/events.out.tfevents.1705346350.Phams-MacBook-Pro.local.26154.0 and /dev/null differ
+diff --git a/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.meta.json b/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.meta.json
+deleted file mode 100644
+index 03b3865..0000000
+--- a/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.meta.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{"step_id": 0, "episode_id": 0, "content_type": "video/mp4"}
+\ No newline at end of file
+diff --git a/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.mp4 b/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.mp4
+deleted file mode 100644
+index 8e1ab22..0000000
+Binary files a/runs/SAC/Pendulum-v1/20240115-141910/videos/rl-video-episode-0.mp4 and /dev/null differ
+diff --git a/utils.py b/utils.py
+index 01bf3b5..faf26e9 100644
+--- a/utils.py
++++ b/utils.py
+@@ -143,7 +143,7 @@ dones_buffer_shape: {self.dones.shape}
+     
+ 
+ class SACMemory():
+-    def __init__(self, memory_size, env, random):
++    def __init__(self, memory_size, env, random, device):
+         """SAC memory - a replay buffer
+ 
+         Args:
+@@ -154,11 +154,11 @@ class SACMemory():
+         """
+         self.total_length = memory_size
+         self.random = random
+-        self.states = torch.zeros((memory_size, )+ env.observation_space.shape, dtype=torch.float)
+-        self.actions = torch.zeros((memory_size, ) + env.action_space.shape, dtype=torch.float)
+-        self.rewards = torch.zeros((memory_size, ), dtype=torch.float)
+-        self.next_states = torch.zeros((memory_size, ) + env.observation_space.shape, dtype=torch.float)
+-        self.dones = torch.zeros((memory_size, ), dtype=torch.float)
++        self.states = torch.zeros((memory_size, )+ env.observation_space.shape, dtype=torch.float).to(device)
++        self.actions = torch.zeros((memory_size, ) + env.action_space.shape, dtype=torch.float).to(device)
++        self.rewards = torch.zeros((memory_size, ), dtype=torch.float).to(device)
++        self.next_states = torch.zeros((memory_size, ) + env.observation_space.shape, dtype=torch.float).to(device)
++        self.dones = torch.zeros((memory_size, ), dtype=torch.float).to(device)
+         self.filled = False
+         self.pointer = 0
+         
+@@ -187,13 +187,6 @@ dones_buffer_shape: {self.dones.shape}
+         self.dones[self.pointer] = done
+         self.pointer += 1
+     
+-    def to_device(self, device):
+-        self.states = self.states.to(device)
+-        self.actions = self.actions.to(device)
+-        self.rewards = self.rewards.to(device)
+-        self.next_states = self.next_states.to(device)
+-        self.dones = self.dones.to(device)
+-    
+     def sample(self, batch_size):
+         if len(self) < batch_size and not self.filled:
+             raise Exception('not enough data to start sample, please lower minibatch size or collect more experiences')
+diff --git a/wandb/debug-internal.log b/wandb/debug-internal.log
+index ba6ccc9..c364cf3 120000
+--- a/wandb/debug-internal.log
++++ b/wandb/debug-internal.log
+@@ -1 +1 @@
+-run-20240113_211755-b35aa47d/logs/debug-internal.log
+\ No newline at end of file
++run-20240116_172437-5cr7bvfz/logs/debug-internal.log
+\ No newline at end of file
+diff --git a/wandb/debug.log b/wandb/debug.log
+index 3d4bd75..a62e343 120000
+--- a/wandb/debug.log
++++ b/wandb/debug.log
+@@ -1 +1 @@
+-run-20240113_211755-b35aa47d/logs/debug.log
+\ No newline at end of file
++run-20240116_172437-5cr7bvfz/logs/debug.log
+\ No newline at end of file
+diff --git a/wandb/latest-run b/wandb/latest-run
+index ac96943..cd6a702 120000
+--- a/wandb/latest-run
++++ b/wandb/latest-run
+@@ -1 +1 @@
+-run-20240113_211755-b35aa47d
+\ No newline at end of file
++run-20240116_172437-5cr7bvfz
+\ No newline at end of file

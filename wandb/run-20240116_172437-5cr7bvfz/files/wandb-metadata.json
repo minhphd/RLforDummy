@@ -1,0 +1,37 @@
+{
+    "os": "macOS-13.6.3-arm64-arm-64bit",
+    "python": "3.10.13",
+    "heartbeatAt": "2024-01-16T22:24:38.785534",
+    "startedAt": "2024-01-16T22:24:37.942426",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/Users/phdhoangminh/Documents/Important/important/colby college/my CS journey/interesting python projects/MachineLearning/Reinforcement Learning/RLforDummys/CleanRL.py",
+    "codePathLocal": "CleanRL.py",
+    "codePath": "CleanRL.py",
+    "git": {
+        "remote": "https://github.com/minhphd/lunar_lander_DQN",
+        "commit": "6734d08c20b44ba4587a0079ba670e72c6148974"
+    },
+    "email": "mhpham26@colby.edu",
+    "root": "/Users/phdhoangminh/Documents/Important/important/colby college/my CS journey/interesting python projects/MachineLearning/Reinforcement Learning/RLforDummys",
+    "host": "Phams-MacBook-Pro.local",
+    "username": "phdhoangminh",
+    "executable": "/Users/phdhoangminh/miniconda3/envs/lunar_lander_pytorch/bin/python3",
+    "cpu_count": 8,
+    "cpu_count_logical": 8,
+    "disk": {
+        "/": {
+            "total": 228.27386474609375,
+            "used": 189.0067024230957
+        }
+    },
+    "gpuapple": {
+        "type": "arm",
+        "vendor": "Apple"
+    },
+    "memory": {
+        "total": 8.0
+    }
+}

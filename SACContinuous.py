@@ -26,20 +26,18 @@ from datetime import datetime
 import itertools
 import copy
 
-LOGSTD_LOW = -20
+LOGSTD_LOW = -5
 LOGSTD_HIGH = 2
 
 class ActorNet(torch.nn.Module):
     def __init__(self, env, obs_shape, act_shape, hiddens):
         super().__init__()
-        self.fc = Net(np.prod(*obs_shape), hiddens[-1], hiddens)
+        self.fc = Net(np.prod(*obs_shape), hiddens[-1], hiddens, open_ended=True)
         
         self.fc_mean = torch.nn.Sequential(
-            torch.nn.ReLU(),
             torch.nn.Linear(hiddens[-1], np.prod(act_shape)))
         
         self.fc_logstd = torch.nn.Sequential(
-            torch.nn.ReLU(),
             torch.nn.Linear(hiddens[-1], np.prod(act_shape)))
         
         #from CleanRL SAC implementation
@@ -121,20 +119,19 @@ class Agent():
             memory_size: int = 1028,
             mini_batch_size: int = 64,
             tau: float = 0.5) -> None:
-        
         self.env = env
         self.steps = 0
         self.device = device
         
         self.writer =writer
         self.generator=generator
-        self.memory = SACMemory(memory_size, env, generator)
+        self.memory = SACMemory(memory_size, env, generator, device)
         self.memory_size = memory_size
         self.mini_batch_size = mini_batch_size
         self.update_epochs = update_epochs
         
         self.policy_net = policy_net.to(device)
-        self.q1_net = q_net.to(device)
+        self.q1_net = copy.deepcopy(q_net).to(device)
         self.q2_net = copy.deepcopy(q_net).to(device)
         self.q1_target_net = copy.deepcopy(q_net).to(device)
         self.q2_target_net = copy.deepcopy(q_net).to(device)
@@ -151,6 +148,7 @@ class Agent():
         self.a_optimizer = torch.optim.Adam([self.log_alpha], lr=q_lr)
         self.tau = tau
  
+
     def optimize_models(self, epochs):
         for _ in range(epochs):
             mb_states, mb_actions, mb_rewards, mb_next_states, mb_dones = self.memory.sample(self.mini_batch_size)
@@ -220,19 +218,13 @@ class Agent():
         
         pbar = tqdm(total=max_steps)
         state, _ = self.env.reset()
-        state_tensor = torch.tensor(state, dtype=torch.float).cpu()
-        current_device = torch.device('cpu')
-        while self.steps < max_steps:
+        state_tensor = torch.tensor(state, dtype=torch.float).to(self.device)
+        for self.steps in range(max_steps):
             pbar.update()
-            self.steps += 1
             
             if self.steps < lr_start:
                 action = self.env.action_space.sample()
             else:
-                if self.steps == lr_start:
-                    self.memory.to_device(self.device)
-                    current_device = self.device
-                    state_tensor = state_tensor.to(current_device)
                 with torch.no_grad():
                     action, _, _ = self.policy_net(state_tensor.unsqueeze(0))
                     action = action.cpu().squeeze().numpy()
@@ -240,23 +232,22 @@ class Agent():
             next_states, rewards, termination, truncation, info = self.env.step(action)
             
             # start sampling action on cpu before learning to prevent bottle neck
-            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(current_device)
-            action_tensor = torch.tensor(action, dtype=torch.float).to(current_device)
-            done = termination or truncation
+            next_states_tensor = torch.tensor(next_states, dtype=torch.float).to(self.device)
+            action_tensor = torch.tensor(action, dtype=torch.float).to(self.device)
             
             #add to memory
-            self.memory.add(state_tensor, action_tensor, rewards, next_states_tensor, done)
+            self.memory.add(state_tensor, action_tensor, rewards, next_states_tensor, termination)
             state_tensor = next_states_tensor
-            
-            if self.steps % train_freq == 0 and self.steps >= lr_start:     
-                self.optimize_models(self.update_epochs)
             
             if 'episode' in info:
                 if self.writer is not None:
                     writer.add_scalar('Performance/total reward over episodes', info['episode']['r'], self.steps)
                 state, _ = self.env.reset()
                 state_tensor = torch.tensor(state, dtype=torch.float).to(self.device)
-                
+            
+            if self.steps % train_freq == 0 and self.steps >= lr_start:     
+                self.optimize_models(self.update_epochs)
+            
                 
         pbar.close()     
 
@@ -290,33 +281,33 @@ class Agent():
 if __name__ == "__main__":
     # Experiment setup
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
-    # gym_id = 'Hopper-v4'  # Environment ID for Gym
+    gym_id = 'Humanoid-v4'  # Environment ID for Gym
     # Alternative environments:
     # gym_id = 'BipedalWalker-v3'
-    gym_id = 'Pendulum-v1'
+    # gym_id = 'Pendulum-v1'
 
     # Hyperparameters for SAC
     policy_lr = 3e-4  # Learning rate for the policy network
     q_lr = 1e-3  # Learning rate for the Q network
     gamma = 0.99  # Discount factor for future rewards
     tau = 0.005  # Target network update rate
-    memory_size = int(3e5)  # Size of the replay buffer
-    minibatch_size = 256  # Size of minibatches for training
-    update_epochs = 1  # Number of epochs for updating networks
-    max_steps = 500000  # Maximum number of steps to train
-    train_freq = 1  # Frequency of training steps
-    lr_start = 5000  # Step to start learning rate scheduling
+    memory_size = int(1e6)  # Size of the replay buffer
+    minibatch_size = 512  # Size of minibatches for training
+    update_epochs = 30  # Number of epochs for updating networks
+    max_steps = 5000000  # Maximum number of steps to train
+    train_freq = 100  # Frequency of training steps
+    lr_start = 10000  # Step to start learning rate scheduling
     eval_episodes = 50  # Number of episodes for evaluation
 
     # Environment and training setup
     seed = 1  # Seed for reproducibility
-    device = torch.device('mps')  # Device for training (CPU, CUDA, or MPS)
+    device = torch.device('cuda')  # Device for training (CPU, CUDA, or MPS)
     capture_video = True  # Flag to determine whether to capture videos
     video_record_freq = 200  # Frequency of recording video episodes
 
     # Weights & Biases configuration (for experiment tracking)
-    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
-    wandb_project_name = 'PPO-mujoco'  # Project name in Weights & Biases
+    wandb_track = True  # Flag to enable/disable Weights & Biases tracking
+    wandb_project_name = 'SAC'  # Project name in Weights & Biases
     wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
 
     # Additional parameters (currently unused or commented out)
@@ -379,8 +370,8 @@ if __name__ == "__main__":
         device=device,
         env=env,
         generator=generator,
-        policy_net=ActorNet(env=env, obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256,256]),
-        q_net=SoftQNetwork(obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256,256]),
+        policy_net=ActorNet(env=env, obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256]),
+        q_net=SoftQNetwork(obs_shape=env.observation_space.shape, act_shape=env.action_space.shape, hiddens=[256]),
         update_epochs=update_epochs,
         policy_lr=policy_lr,
         q_lr=q_lr,
@@ -392,7 +383,6 @@ if __name__ == "__main__":
 
     # Train the agent
     agent.train(max_steps, train_freq, lr_start)
-
 
     # Evaluation and save metrics
     metrics = {
