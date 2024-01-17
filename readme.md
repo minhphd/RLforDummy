@@ -25,4 +25,6 @@ In this repository, you will find my implementations of the following algorithms
    - Reference: T. Haarnoja, A. Zhou, P. Abbeel, and S. Levine, "Soft Actor-Critic: Off-Policy Deep Reinforcement Learning with Real-World Robots," arXiv preprint arXiv:1801.01290, 2018. [Link](https://arxiv.org/abs/1707.06347)
 
 ## Solved Environment
-Each of the implemented algorithms has demonstrated benchmark results. Results can be checked in wandb report below
+Each of the implemented algorithms has demonstrated benchmark results. Results can be checked in wandb report below. Due to limited computing resources, I couldn't run all algorithms on all atari and mujoco benchmark. Contributions are welcome.
+
+https://api.wandb.ai/links/phdminh01/t99sr00t
