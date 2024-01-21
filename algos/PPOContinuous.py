@@ -15,13 +15,26 @@ Description:
 import torch
 import gymnasium as gym
 import numpy as np
-from tensorboardX import SummaryWriter
-from Network import Net
+from torch.utils.tensorboard import SummaryWriter
+from misc.Network import Net
 from tqdm import tqdm
-from utils import PPOMemoryMultis
+from misc.utils import PPOMemoryMultis
 from torch.utils.data import DataLoader
 from datetime import datetime
-import sys
+import itertools
+
+class ActorNet(torch.nn.Module):
+    def __init__(self, obs_shape, act_shape, hiddens):
+        super().__init__()
+        self.actor_mean = Net(np.prod(*obs_shape), np.prod(*act_shape), hiddens)
+        self.actor_logstd = torch.nn.Parameter(torch.zeros(1, np.prod(envs.single_action_space.shape)))
+        
+    def forward(self, x):
+        mean = self.actor_mean(x)
+        log_std = self.actor_logstd.expand_as(mean)
+        action_std = torch.exp(log_std)
+        probs = torch.distributions.Normal(mean, action_std)
+        return probs
 
 class Agent():
     def __init__(
@@ -34,10 +47,9 @@ class Agent():
             critic_net: torch.nn.Module,
             num_envs: int = 1,
             update_epochs: int = 10,
-            lr_actor: float = 0.01,
-            lr_critic: float = 0.01,
+            lr: float = 2.5e-4,
             vf_coef: float = 0.5,
-            ent_coef: float = 0.01,
+            ent_coef: float = 0.0,
             gae_lambda: float = 0.95,
             discount: float = 0.99,
             memory_size: int = 1028,
@@ -65,18 +77,16 @@ class Agent():
         """
         self.envs = envs
         self.writer = writer
-        self.memory = PPOMemoryMultis(memory_size, envs.single_observation_space.shape, num_envs, device=device)
+        self.memory = PPOMemoryMultis(memory_size, envs.single_observation_space.shape, num_envs, device=device, continuous=True, act_shape=envs.single_action_space.shape)
         
         self.update_epochs = update_epochs
-        self.actor_net = actor_net.to(device)
+        
         self.critic_net = critic_net.to(device)
+        self.actor_net = actor_net.to(device)
         
-        self.lr_actor = lr_actor
-        self.optimizer_actor = torch.optim.Adam(self.actor_net.parameters(), lr_actor)
-        
-        self.lr_critic = lr_critic
-        self.optimizer_critic = torch.optim.Adam(self.critic_net.parameters(), lr_critic)
-        
+        self.lr = lr
+        self.optimizer = torch.optim.Adam(itertools.chain(self.actor_net.parameters(), self.critic_net.parameters()), lr=lr, eps=1e-5)
+
         self.vf_coef = vf_coef
         self.ent_coef = ent_coef
         self.mini_batch_size = mini_batch_size
@@ -89,7 +99,7 @@ class Agent():
         self.next_states = None
         self.next_dones = torch.tensor([False] * num_envs).to(device, dtype=torch.float)
 
-    def policy(self, states: torch.Tensor):
+    def policy(self, states: torch.Tensor, action=None):
         """getting action based on current state
 
         Args:
@@ -99,11 +109,10 @@ class Agent():
             log_prob (Categorical): log_prob of current action
             action (int): action
         """
-        with torch.no_grad():
-            probs = self.actor_net(states)
-        dists = torch.distributions.Categorical(probs)
-        actions = dists.sample()
-        return dists.log_prob(actions), actions
+        probs = self.actor_net(states)
+        if action is None:
+            action = probs.sample()
+        return probs.log_prob(action).sum(1), action, probs.entropy().sum(1)
     
     
     def compute_returns(self, values, dones, rewards):
@@ -149,7 +158,7 @@ class Agent():
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_states = states.reshape((-1, ) + self.envs.single_observation_space.shape)
-        b_actions = actions.reshape(-1)
+        b_actions = actions.reshape((-1, ) + self.envs.single_action_space.shape)
         b_rewards = rewards.reshape(-1)
         b_probs = probs.reshape(-1)
         b_values = values.reshape(-1)
@@ -161,16 +170,12 @@ class Agent():
                 mb_advantages = b_advantages[batch]
                 mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
                 mb_returns = b_returns[batch]
-                
+
                 new_values = self.critic_net(mb_states).squeeze()
-                cur_probs = self.actor_net(mb_states)
-                
-                action_dists = torch.distributions.Categorical(cur_probs)
-                
-                new_log_probs = action_dists.log_prob(mb_actions)
+                new_log_probs, _, entropy = self.policy(mb_states, mb_actions)
                 old_log_probs = b_probs[batch]
                 
-                entropy_loss = action_dists.entropy().mean()
+                entropy_loss = entropy.mean()
                 
                 logratio = (new_log_probs - old_log_probs)
                 ratio = logratio.exp()
@@ -186,16 +191,13 @@ class Agent():
                 total_loss = actor_loss + self.vf_coef * critic_loss - self.ent_coef * entropy_loss
                 
                 # update net works 
-                self.optimizer_actor.zero_grad()
-                self.optimizer_critic.zero_grad()
-                total_loss.backward()               
+                self.optimizer.zero_grad()
+                total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor_net.parameters(), 0.5)
                 torch.nn.utils.clip_grad_norm_(self.critic_net.parameters(), 0.5)
-                self.optimizer_critic.step()
-                self.optimizer_actor.step()
+                self.optimizer.step()
 
             #log to tensorboard
-        self.writer.add_scalar('Networks/critic_val', self.critic_net(states).mean(), self.steps)
         self.writer.add_scalar('Networks/actor_loss', actor_loss, self.steps)
         self.writer.add_scalar('Networks/critic_loss', critic_loss, self.steps)
         self.writer.add_scalar('Networks/entropy_loss', entropy_loss, self.steps)
@@ -221,8 +223,8 @@ class Agent():
                 t += 1
                 pbar.update(num_envs)
                 self.steps += num_envs
-                log_probs, actions = self.policy(next_states_tensor)
                 with torch.no_grad():
+                    log_probs, actions, _ = self.policy(next_states_tensor)
                     value = self.critic_net(next_states_tensor).squeeze()
                 
                 next_states, rewards, terminations, truncations, infos = envs.step(actions.cpu().numpy())
@@ -269,9 +271,8 @@ class Agent():
             total_reward = 0
             done = False
             while not done:
-                _, action = self.policy(torch.tensor(state))
-                next_state, reward, terminated, truncated, _ = env.step(
-                    action.item())
+                _, actions, _ = self.policy(torch.tensor([state], dtype=torch.float))
+                next_state, reward, terminated, truncated, _ = env.step(actions.cpu().squeeze().numpy())
                 done = (terminated or truncated)
                 total_reward += reward
                 state = next_state
@@ -288,6 +289,12 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx==0:
             env = gym.wrappers.RecordVideo(env, logpath + "/videos", episode_trigger= lambda t : t % video_record_freq == 0)
+        env = gym.wrappers.FlattenObservation(env)  # deal with dm_control's Dict observation space
+        env = gym.wrappers.ClipAction(env)
+        env = gym.wrappers.NormalizeObservation(env)
+        env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10))
+        env = gym.wrappers.NormalizeReward(env)
+        env = gym.wrappers.TransformReward(env, lambda reward: np.clip(reward, -10, 10))
         env.reset(seed=seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -297,19 +304,20 @@ def make_env(gym_id, seed, idx, capture_video, video_record_freq, logpath):
 if __name__ == "__main__":
     # Experiment setup
     exp_name = datetime.now().strftime('%Y%m%d-%H%M%S')  # Unique experiment name based on current timestamp
-    gym_id = 'Acrobot-v1'  # Environment ID for Gym (Acrobot-v1)
-    lr_actor = 2.5e-4  # Learning rate for the actor network
-    lr_critic = 1e-3  # Learning rate for the critic network
+    gym_id = 'Pusher-v4'  # Environment ID for Gym
+    lr = 1e-3  # Learning rate
     seed = 1  # Seed for reproducibility
-    max_steps = 200000  # Maximum number of steps
+    max_steps = 2000000  # Maximum number of steps
     num_envs = 8  # Number of parallel environments
 
     # Memory and optimization hyperparameters
-    memory_size = 265  # Size of the replay buffer
-    minibatch_size = 265  # Size of minibatches for training
-    device = torch.device('cpu')  # Device for training (CPU)
-    capture_video = False  # Flag to determine whether to capture videos
-    video_record_freq = 50  # Frequency of recording video episodes
+    memory_size = 2048  # Size of the replay buffer
+    minibatch_size = 512  # Size of minibatches for training
+    device = torch.device('cuda')  # Device for training (CPU or CUDA)
+
+    # Video recording and evaluation parameters
+    capture_video = True  # Flag to determine whether to capture videos
+    video_record_freq = 200  # Frequency of recording video episodes
     update_epochs = 10  # Number of epochs for updating networks
     eval_episodes = 50  # Number of episodes for evaluation
 
@@ -317,12 +325,12 @@ if __name__ == "__main__":
     discount = 0.99  # Discount factor for future rewards
     gae_lambda = 0.95  # GAE lambda parameter
     epsilon = 0.2  # PPO clipping parameter
-    ent_coef = 0.1  # Entropy coefficient
+    ent_coef = 0.001  # Entropy coefficient
     vf_coef = 0.5  # Value function coefficient
 
     # Weights & Biases configuration (for experiment tracking)
-    wandb_track = False  # Flag to enable/disable Weights & Biases tracking
-    wandb_project_name = 'PPO_1env_discrete'  # Project name in Weights & Biases
+    wandb_track = True  # Flag to enable Weights & Biases tracking
+    wandb_project_name = 'PPO-mujoco'  # Project name in Weights & Biases
     wandb_entity = 'phdminh01'  # User/entity name in Weights & Biases
     
     if wandb_track:
@@ -337,7 +345,7 @@ if __name__ == "__main__":
             save_code=True,
         )
     
-    logpath = f'./runs/PPO/{gym_id}/{exp_name}' 
+    logpath = f'./runs/PPOContinuous/{gym_id}/{exp_name}' 
     
     envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, capture_video, video_record_freq, logpath) for i in range(num_envs)])
     
@@ -353,8 +361,7 @@ if __name__ == "__main__":
         'algorithm': 'PPO',
         'environment_id': gym_id,
         'num_envs': num_envs,
-        'learning_rate_actor': lr_actor,
-        'learning_rate_critic': lr_critic,
+        'learning_rate': lr,
         'random_seed': seed,
         'maximum_steps': max_steps,
         'memory_size': memory_size,
@@ -373,14 +380,13 @@ if __name__ == "__main__":
     agent = Agent(
         envs=envs,
         num_envs=num_envs,
-        actor_net=Net(np.prod(*envs.single_observation_space.shape), envs.single_action_space.n, [128, 128], softmax=True),
-        critic_net=Net(np.prod(*envs.single_observation_space.shape), 1, [128, 128]),
+        actor_net=ActorNet(obs_shape=envs.single_observation_space.shape, act_shape=envs.single_action_space.shape, hiddens=[256, 256]),
+        critic_net=Net(np.prod(*envs.single_observation_space.shape), 1, [256, 256]),
         writer=writer,
         discount=discount,
         gae_lambda=gae_lambda,
         update_epochs=update_epochs,
-        lr_actor=lr_actor,
-        lr_critic=lr_critic,
+        lr=lr,
         memory_size=memory_size,
         mini_batch_size=minibatch_size,
         epsilon=epsilon,
@@ -393,11 +399,11 @@ if __name__ == "__main__":
 
 
     # Evaluation and save metrics
-    metrics = {
-        'reward_eval': agent.eval(episodes=eval_episodes, gym_id=gym_id)
-    }
+    # metrics = {
+    #     'reward_eval': agent.eval(episodes=eval_episodes, gym_id=gym_id)
+    # }
 
-    writer.add_hparams(hparams, metrics)
+    # writer.add_hparams(hparams, metrics)
     
     # Close the environment if necessary
     envs.close()

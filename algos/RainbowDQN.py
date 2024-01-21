@@ -16,15 +16,14 @@ Description:
 
 import torch
 import copy
-from utils import PrioritizedReplayBuffer, argmax, parse_hyperparameters
+from misc.utils import PrioritizedReplayBuffer, argmax
 import gymnasium as gym
 import numpy as np
-import argparse
 from torch.utils.tensorboard import SummaryWriter
-from Network import Net
+from misc.Network import Net
 from tqdm import tqdm
 from datetime import datetime
-from Network import Net
+from misc.Network import Net
 
 
 class Agent():

@@ -18,9 +18,9 @@ import gymnasium as gym
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
-from Network import Net
+from misc.Network import Net
 from tqdm import tqdm
-from utils import SACMemory
+from misc.utils import SACMemory
 from torch.utils.data import DataLoader
 from datetime import datetime
 import itertools

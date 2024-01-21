@@ -17,9 +17,8 @@ import torch
 import gymnasium as gym
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-from Network import CNNnetwork
 from tqdm import tqdm
-from utils import PPOMemoryMultis
+from misc.utils import PPOMemoryMultis
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from datetime import datetime
